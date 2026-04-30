@@ -1,0 +1,25 @@
+# Clash Template Configuration
+# Proxy nodes will be injected into the 'proxies' list
+
+proxy-groups:
+  - name: "PROXY"
+    type: select
+    proxies:
+      - DIRECT
+
+  - name: "Auto"
+    type: url-test
+    proxies:
+      - PROXY
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+
+rules:
+  - DOMAIN-SUFFIX,google.com,PROXY
+  - DOMAIN-SUFFIX,youtube.com,PROXY
+  - DOMAIN-SUFFIX,github.com,PROXY
+  - GEOIP,CN,DIRECT
+  - MATCH,PROXY
+
+# This placeholder will be replaced with actual proxy nodes
+proxies: []
