@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/EricWvi/subhub/internal/config"
 	"github.com/EricWvi/subhub/internal/fetch"
@@ -26,6 +28,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
+
+	scheduler := refresh.NewScheduler(repo, refreshSvc.RefreshProvider, time.Minute)
+	go scheduler.Start(context.Background())
 
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, mux))
 }

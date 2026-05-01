@@ -138,6 +138,46 @@ func TestRefreshReturnsNotFoundForMissingProvider(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
+type fakeClock struct {
+	now time.Time
+}
+
+func (c *fakeClock) Now() time.Time { return c.now }
+
+func TestSchedulerRefreshesDueProvidersOnly(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "scheduler_test.db")
+	db := store.MustOpen(dbPath)
+	defer db.Close()
+
+	repo := provider.NewRepository(db)
+	ctx := context.Background()
+
+	p1, err := repo.Create(ctx, provider.Provider{Name: "due", URL: "https://due.example.com", RefreshIntervalSeconds: 300})
+	require.NoError(t, err)
+
+	p2, err := repo.Create(ctx, provider.Provider{Name: "fresh", URL: "https://fresh.example.com", RefreshIntervalSeconds: 7200})
+	require.NoError(t, err)
+
+	fakeNow := time.Now().UTC()
+	_, err = db.ExecContext(ctx, `UPDATE providers SET updated_at = ? WHERE id = ?`, fakeNow.Add(-10*time.Minute).Format(time.RFC3339), p1.ID)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `UPDATE providers SET updated_at = ? WHERE id = ?`, fakeNow.Add(-30*time.Minute).Format(time.RFC3339), p2.ID)
+	require.NoError(t, err)
+
+	var refreshed []int64
+	countFn := func(ctx context.Context, id int64) error {
+		refreshed = append(refreshed, id)
+		return nil
+	}
+
+	scheduler := refresh.NewScheduler(repo, countFn, time.Minute)
+	scheduler.WithClock(&fakeClock{now: fakeNow})
+	scheduler.RunOnce(ctx)
+
+	assert.Equal(t, []int64{p1.ID}, refreshed)
+}
+
 func TestRefreshRecordsFailureOnUpstreamError(t *testing.T) {
 	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
 	require.NoError(t, err)
