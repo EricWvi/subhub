@@ -13,6 +13,7 @@ import (
 
 	"github.com/EricWvi/subhub/internal/config"
 	"github.com/EricWvi/subhub/internal/fetch"
+	"github.com/EricWvi/subhub/internal/output"
 	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/refresh"
 	"github.com/EricWvi/subhub/internal/store"
@@ -40,8 +41,12 @@ func newTestServerWithRefresh(t *testing.T) (*httptest.Server, *provider.Reposit
 	refreshSvc := refresh.NewService(repo, fetcher)
 	handler.SetRefresher(refreshSvc.RefreshProvider)
 
+	templatePath := filepath.Join("..", "fixtures", "template.yaml")
+	outputHandler := output.NewHandler(repo, templatePath)
+
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
+	outputHandler.RegisterRoutes(mux)
 	return httptest.NewServer(mux), repo
 }
 
@@ -192,4 +197,44 @@ func TestRefreshRecordsFailureOnUpstreamError(t *testing.T) {
 	resp := refreshProvider(t, ts.URL, providerID)
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusBadGateway, resp.StatusCode)
+}
+
+func TestMihomoOutputContainsNodesFromAllProviders(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
+	require.NoError(t, err)
+
+	upstream := newFlakyUpstream(t, fixture)
+	ts, _ := newTestServerWithRefresh(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"delta","url":"%s"}`, upstream.server.URL))
+
+	refreshResp := refreshProvider(t, ts.URL, providerID)
+	defer refreshResp.Body.Close()
+	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
+
+	mihomoResp, err := http.Get(ts.URL + "/subscriptions/mihomo")
+	require.NoError(t, err)
+	defer mihomoResp.Body.Close()
+	assert.Equal(t, http.StatusOK, mihomoResp.StatusCode)
+	assert.Equal(t, "application/yaml", mihomoResp.Header.Get("Content-Type"))
+
+	body := readBody(t, mihomoResp)
+	assert.Contains(t, body, "name: vmess-hk-01")
+	assert.Contains(t, body, "name: ss-jp-01")
+	assert.Contains(t, body, "proxy-groups:")
+	assert.Contains(t, body, "rules:")
+}
+
+func TestMihomoOutputEmptyWhenNoSnapshots(t *testing.T) {
+	ts, _ := newTestServerWithRefresh(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/subscriptions/mihomo")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body := readBody(t, resp)
+	assert.Contains(t, body, "proxies: []")
 }
