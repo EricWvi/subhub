@@ -29,3 +29,11 @@ type RefreshAttempt struct {
 	Message     string
 	AttemptedAt time.Time
 }
+
+type RefreshFailedError struct {
+	Message string
+}
+
+func (e *RefreshFailedError) Error() string {
+	return e.Message
+}

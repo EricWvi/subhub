@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -8,12 +9,19 @@ import (
 	"strings"
 )
 
+type RefreshProviderFunc func(ctx context.Context, providerID int64) error
+
 type Handler struct {
-	service *Service
+	service   *Service
+	refresher RefreshProviderFunc
 }
 
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
+}
+
+func (h *Handler) SetRefresher(f RefreshProviderFunc) {
+	h.refresher = f
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -33,10 +41,20 @@ func (h *Handler) handleProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleProviderByID(w http.ResponseWriter, r *http.Request) {
-	idStr := strings.TrimPrefix(r.URL.Path, "/providers/")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	path := strings.TrimPrefix(r.URL.Path, "/providers/")
+	parts := strings.Split(path, "/")
+	id, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
 		http.Error(w, "invalid provider id", http.StatusBadRequest)
+		return
+	}
+
+	if len(parts) >= 2 {
+		if parts[1] == "refresh" && r.Method == http.MethodPost {
+			h.refreshProvider(w, r, id)
+			return
+		}
+		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 
@@ -50,6 +68,27 @@ func (h *Handler) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (h *Handler) refreshProvider(w http.ResponseWriter, r *http.Request, id int64) {
+	if h.refresher == nil {
+		http.Error(w, "refresh not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.refresher(r.Context(), id); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, "provider not found", http.StatusNotFound)
+		} else {
+			var rfe *RefreshFailedError
+			if errors.As(err, &rfe) {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
