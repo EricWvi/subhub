@@ -17,11 +17,16 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
+func nowInLocation() time.Time {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	return time.Now().In(loc)
+}
+
 func (r *Repository) Create(ctx context.Context, p Provider) (Provider, error) {
-	now := time.Now().UTC()
+	now := nowInLocation()
 	result, err := r.db.ExecContext(ctx,
-		`INSERT INTO providers (name, url, refresh_interval_seconds, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-		p.Name, p.URL, p.RefreshIntervalSeconds, now.Format(time.RFC3339), now.Format(time.RFC3339),
+		`INSERT INTO providers (name, url, refresh_interval_minutes, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		p.Name, p.URL, p.RefreshIntervalMinutes, now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	if err != nil {
 		return Provider{}, err
@@ -35,7 +40,12 @@ func (r *Repository) Create(ctx context.Context, p Provider) (Provider, error) {
 
 func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, name, url, refresh_interval_seconds, created_at, updated_at FROM providers ORDER BY id`,
+		`SELECT 
+			p.id, p.name, p.url, p.refresh_interval_minutes, p.created_at, p.updated_at,
+			ra.status, ra.message
+		FROM providers p
+		LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
+		ORDER BY p.id`,
 	)
 	if err != nil {
 		return nil, err
@@ -46,11 +56,14 @@ func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 	for rows.Next() {
 		var p Provider
 		var createdAt, updatedAt string
-		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalSeconds, &createdAt, &updatedAt); err != nil {
+		var status, message sql.NullString
+		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &createdAt, &updatedAt, &status, &message); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		p.LastRefreshStatus = status.String
+		p.LastRefreshMessage = message.String
 		providers = append(providers, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -62,9 +75,15 @@ func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 func (r *Repository) GetByID(ctx context.Context, id int64) (Provider, error) {
 	var p Provider
 	var createdAt, updatedAt string
+	var status, message sql.NullString
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, name, url, refresh_interval_seconds, created_at, updated_at FROM providers WHERE id = ?`, id,
-	).Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalSeconds, &createdAt, &updatedAt)
+		`SELECT 
+			p.id, p.name, p.url, p.refresh_interval_minutes, p.created_at, p.updated_at,
+			ra.status, ra.message
+		FROM providers p
+		LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
+		WHERE p.id = ?`, id,
+	).Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &createdAt, &updatedAt, &status, &message)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Provider{}, ErrNotFound
@@ -73,14 +92,16 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (Provider, error) {
 	}
 	p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	p.LastRefreshStatus = status.String
+	p.LastRefreshMessage = message.String
 	return p, nil
 }
 
 func (r *Repository) Update(ctx context.Context, p Provider) (Provider, error) {
-	now := time.Now().UTC()
+	now := nowInLocation()
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE providers SET name = ?, url = ?, refresh_interval_seconds = ?, updated_at = ? WHERE id = ?`,
-		p.Name, p.URL, p.RefreshIntervalSeconds, now.Format(time.RFC3339), p.ID,
+		`UPDATE providers SET name = ?, url = ?, refresh_interval_minutes = ?, updated_at = ? WHERE id = ?`,
+		p.Name, p.URL, p.RefreshIntervalMinutes, now.Format(time.RFC3339), p.ID,
 	)
 	if err != nil {
 		return Provider{}, err
@@ -94,7 +115,7 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 	return err
 }
 
-func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerID int64, format string, raw []byte, nodes []map[string]any) error {
+func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerID int64, format string, nodes []map[string]any) error {
 	normalizedYAML, err := yaml.Marshal(map[string]any{"proxies": nodes})
 	if err != nil {
 		return err
@@ -106,14 +127,33 @@ func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerI
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx, `UPDATE provider_snapshots SET is_last_known_good = 0 WHERE provider_id = ?`, providerID); err != nil {
+	now := nowInLocation()
+	nowStr := now.Format(time.RFC3339)
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO provider_snapshots (provider_id, format, normalized_yaml, node_count, fetched_at) 
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(provider_id) DO UPDATE SET 
+		 	format=excluded.format, 
+			normalized_yaml=excluded.normalized_yaml, 
+			node_count=excluded.node_count, 
+			fetched_at=excluded.fetched_at`,
+		providerID, format, string(normalizedYAML), len(nodes), nowStr,
+	)
+	if err != nil {
 		return err
 	}
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO provider_snapshots (provider_id, format, raw_payload, normalized_yaml, node_count, fetched_at, is_last_known_good) VALUES (?, ?, ?, ?, ?, ?, 1)`,
-		providerID, format, raw, string(normalizedYAML), len(nodes), time.Now().UTC().Format(time.RFC3339),
+		`INSERT INTO refresh_attempts (provider_id, status, message, attempted_at) VALUES (?, 'success', 'OK', ?)
+		 ON CONFLICT(provider_id) DO UPDATE SET status=excluded.status, message=excluded.message, attempted_at=excluded.attempted_at`,
+		providerID, nowStr,
 	)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `UPDATE providers SET updated_at = ? WHERE id = ?`, nowStr, providerID)
 	if err != nil {
 		return err
 	}
@@ -122,9 +162,11 @@ func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerI
 }
 
 func (r *Repository) RecordRefreshFailure(ctx context.Context, providerID int64, message string) error {
+	now := nowInLocation()
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO refresh_attempts (provider_id, status, message, attempted_at) VALUES (?, 'failure', ?, ?)`,
-		providerID, message, time.Now().UTC().Format(time.RFC3339),
+		`INSERT INTO refresh_attempts (provider_id, status, message, attempted_at) VALUES (?, 'failure', ?, ?)
+		 ON CONFLICT(provider_id) DO UPDATE SET status=excluded.status, message=excluded.message, attempted_at=excluded.attempted_at`,
+		providerID, message, now.Format(time.RFC3339),
 	)
 	return err
 }
@@ -133,10 +175,13 @@ func (r *Repository) GetLatestSnapshot(ctx context.Context, providerID int64) (S
 	var s Snapshot
 	var fetchedAt string
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, provider_id, format, raw_payload, normalized_yaml, node_count, fetched_at, is_last_known_good FROM provider_snapshots WHERE provider_id = ? AND is_last_known_good = 1`,
+		`SELECT id, provider_id, format, normalized_yaml, node_count, fetched_at FROM provider_snapshots WHERE provider_id = ?`,
 		providerID,
-	).Scan(&s.ID, &s.ProviderID, &s.Format, &s.RawPayload, &s.NormalizedYAML, &s.NodeCount, &fetchedAt, &s.IsLastKnownGood)
+	).Scan(&s.ID, &s.ProviderID, &s.Format, &s.NormalizedYAML, &s.NodeCount, &fetchedAt)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Snapshot{}, ErrNotFound
+		}
 		return Snapshot{}, err
 	}
 	s.FetchedAt, _ = time.Parse(time.RFC3339, fetchedAt)
@@ -145,7 +190,7 @@ func (r *Repository) GetLatestSnapshot(ctx context.Context, providerID int64) (S
 
 func (r *Repository) ListLatestNodes(ctx context.Context) ([]map[string]any, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT normalized_yaml FROM provider_snapshots WHERE is_last_known_good = 1`,
+		`SELECT normalized_yaml FROM provider_snapshots`,
 	)
 	if err != nil {
 		return nil, err

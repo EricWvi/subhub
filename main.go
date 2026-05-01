@@ -36,5 +36,6 @@ func main() {
 	scheduler := refresh.NewScheduler(repo, refreshSvc.RefreshProvider, time.Minute)
 	go scheduler.Start(context.Background())
 
+	log.Printf("[MAIN] Starting SubHub on %s", cfg.ListenAddr)
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, mux))
 }

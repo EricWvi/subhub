@@ -2,7 +2,7 @@ package config
 
 import "time"
 
-const DefaultRefreshInterval = 2 * time.Hour
+const DefaultRefreshInterval = 120 * time.Minute
 
 type Config struct {
 	ListenAddr             string

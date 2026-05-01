@@ -9,20 +9,20 @@ import (
 	"github.com/EricWvi/subhub/internal/config"
 )
 
-var ErrRefreshIntervalTooShort = errors.New("refresh interval must be at least 300 seconds")
+var ErrRefreshIntervalTooShort = errors.New("refresh interval must be at least 5 minutes")
 var ErrNotFound = errors.New("provider not found")
 var ErrInvalidURL = errors.New("invalid provider url")
 
 type CreateProviderInput struct {
 	Name                   string `json:"name"`
 	URL                    string `json:"url"`
-	RefreshIntervalSeconds int64  `json:"refresh_interval_seconds"`
+	RefreshIntervalMinutes int64  `json:"refresh_interval_minutes"`
 }
 
 type UpdateProviderInput struct {
 	Name                   string `json:"name"`
 	URL                    string `json:"url"`
-	RefreshIntervalSeconds int64  `json:"refresh_interval_seconds"`
+	RefreshIntervalMinutes int64  `json:"refresh_interval_minutes"`
 }
 
 type Service struct {
@@ -37,17 +37,17 @@ func (s *Service) Create(ctx context.Context, in CreateProviderInput) (Provider,
 	if _, err := url.ParseRequestURI(in.URL); err != nil {
 		return Provider{}, fmt.Errorf("%w: %s", ErrInvalidURL, err.Error())
 	}
-	interval := in.RefreshIntervalSeconds
+	interval := in.RefreshIntervalMinutes
 	if interval == 0 {
-		interval = int64(config.DefaultRefreshInterval.Seconds())
+		interval = int64(config.DefaultRefreshInterval.Minutes())
 	}
-	if interval < 300 {
+	if interval < 5 {
 		return Provider{}, ErrRefreshIntervalTooShort
 	}
 	return s.repo.Create(ctx, Provider{
 		Name:                   in.Name,
 		URL:                    in.URL,
-		RefreshIntervalSeconds: interval,
+		RefreshIntervalMinutes: interval,
 	})
 }
 
@@ -70,11 +70,11 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateProviderInput) 
 	if _, err := url.ParseRequestURI(in.URL); err != nil {
 		return Provider{}, fmt.Errorf("%w: %s", ErrInvalidURL, err.Error())
 	}
-	interval := in.RefreshIntervalSeconds
+	interval := in.RefreshIntervalMinutes
 	if interval == 0 {
-		interval = int64(config.DefaultRefreshInterval.Seconds())
+		interval = int64(config.DefaultRefreshInterval.Minutes())
 	}
-	if interval < 300 {
+	if interval < 5 {
 		return Provider{}, ErrRefreshIntervalTooShort
 	}
 	p, err := s.repo.GetByID(ctx, id)
@@ -86,10 +86,14 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateProviderInput) 
 	}
 	p.Name = in.Name
 	p.URL = in.URL
-	p.RefreshIntervalSeconds = interval
+	p.RefreshIntervalMinutes = interval
 	return s.repo.Update(ctx, p)
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *Service) GetLatestSnapshot(ctx context.Context, id int64) (Snapshot, error) {
+	return s.repo.GetLatestSnapshot(ctx, id)
 }

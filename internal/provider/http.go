@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type RefreshProviderFunc func(ctx context.Context, providerID int64) error
@@ -50,9 +52,17 @@ func (h *Handler) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(parts) >= 2 {
-		if parts[1] == "refresh" && r.Method == http.MethodPost {
-			h.refreshProvider(w, r, id)
-			return
+		switch parts[1] {
+		case "refresh":
+			if r.Method == http.MethodPost {
+				h.refreshProvider(w, r, id)
+				return
+			}
+		case "snapshot":
+			if r.Method == http.MethodGet {
+				h.getSnapshot(w, r, id)
+				return
+			}
 		}
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -71,11 +81,14 @@ func (h *Handler) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) refreshProvider(w http.ResponseWriter, r *http.Request, id int64) {
+	log.Printf("[API] POST /providers/%d/refresh", id)
 	if h.refresher == nil {
+		log.Printf("[API] Refresh not configured")
 		http.Error(w, "refresh not configured", http.StatusServiceUnavailable)
 		return
 	}
 	if err := h.refresher(r.Context(), id); err != nil {
+		log.Printf("[API] Refresh failed for provider %d: %v", id, err)
 		if errors.Is(err, ErrNotFound) {
 			http.Error(w, "provider not found", http.StatusNotFound)
 		} else {
@@ -88,12 +101,15 @@ func (h *Handler) refreshProvider(w http.ResponseWriter, r *http.Request, id int
 		}
 		return
 	}
+	log.Printf("[API] Refresh success for provider %d", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[API] GET /providers")
 	providers, err := h.service.List(r.Context())
 	if err != nil {
+		log.Printf("[API] List providers failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -105,13 +121,16 @@ func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[API] POST /providers")
 	var in CreateProviderInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		log.Printf("[API] Decode create provider input failed: %v", err)
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 	p, err := h.service.Create(r.Context(), in)
 	if err != nil {
+		log.Printf("[API] Create provider failed: %v", err)
 		switch {
 		case errors.Is(err, ErrRefreshIntervalTooShort):
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -122,14 +141,31 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	log.Printf("[API] Created provider %d (%s)", p.ID, p.Name)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"provider": p})
+
+	// Trigger initial fetch
+	if h.refresher != nil {
+		go func() {
+			log.Printf("[BG] Triggering initial fetch for provider %d", p.ID)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			if err := h.refresher(ctx, p.ID); err != nil {
+				log.Printf("[BG] Initial fetch failed for provider %d: %v", p.ID, err)
+			} else {
+				log.Printf("[BG] Initial fetch success for provider %d", p.ID)
+			}
+		}()
+	}
 }
 
 func (h *Handler) getProvider(w http.ResponseWriter, r *http.Request, id int64) {
+	log.Printf("[API] GET /providers/%d", id)
 	p, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
+		log.Printf("[API] Get provider %d failed: %v", id, err)
 		if errors.Is(err, ErrNotFound) {
 			http.Error(w, "provider not found", http.StatusNotFound)
 		} else {
@@ -142,13 +178,16 @@ func (h *Handler) getProvider(w http.ResponseWriter, r *http.Request, id int64) 
 }
 
 func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request, id int64) {
+	log.Printf("[API] PUT /providers/%d", id)
 	var in UpdateProviderInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		log.Printf("[API] Decode update provider input failed: %v", err)
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 	p, err := h.service.Update(r.Context(), id, in)
 	if err != nil {
+		log.Printf("[API] Update provider %d failed: %v", id, err)
 		switch {
 		case errors.Is(err, ErrRefreshIntervalTooShort):
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -161,15 +200,35 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request, id int6
 		}
 		return
 	}
+	log.Printf("[API] Updated provider %d", id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"provider": p})
 }
 
 func (h *Handler) deleteProvider(w http.ResponseWriter, r *http.Request, id int64) {
+	log.Printf("[API] DELETE /providers/%d", id)
 	err := h.service.Delete(r.Context(), id)
 	if err != nil {
+		log.Printf("[API] Delete provider %d failed: %v", id, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[API] Deleted provider %d", id)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) getSnapshot(w http.ResponseWriter, r *http.Request, id int64) {
+	log.Printf("[API] GET /providers/%d/snapshot", id)
+	s, err := h.service.GetLatestSnapshot(r.Context(), id)
+	if err != nil {
+		log.Printf("[API] Get snapshot for provider %d failed: %v", id, err)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, "snapshot not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"snapshot": s})
 }

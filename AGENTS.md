@@ -8,7 +8,7 @@ go test -race ./...              # run all tests with race detector
 go test ./tests/integration -run TestName -v   # single integration test
 go test ./tests/unit -run TestName -v          # single unit test
 go vet ./...                     # static analysis
-go build ./cmd/subhub            # build the binary
+go build .                       # build the binary
 ```
 
 There is no lint or typecheck command beyond `go vet`.
@@ -24,6 +24,7 @@ config.Load → store.MustOpen (SQLite) → provider.Repository → provider.Ser
 ```
 
 **Package boundaries** (all under `internal/`):
+
 - `config` — hardcoded defaults (no env/flag parsing)
 - `store` — SQLite open + embedded SQL migrations (`store/migrations/`)
 - `provider` — domain models, repository (SQL CRUD), service (validation/business rules), HTTP handlers
@@ -43,6 +44,7 @@ config.Load → store.MustOpen (SQLite) → provider.Repository → provider.Ser
 - **Provider handler routing:** `provider/http.go` manually parses `/providers/{id}` and `/providers/{id}/refresh` from URL path via `strings.TrimPrefix` + `strings.Split` (no router library).
 - **Refresh injection:** `provider.Handler.SetRefresher(RefreshProviderFunc)` avoids circular deps between `provider` and `refresh` packages.
 - **Test proxy maps** are `[]map[string]any`, not structs — this is the Mihomo-native format throughout.
+- use `Asia/Shanghai` as Timezone
 
 ## Testing
 

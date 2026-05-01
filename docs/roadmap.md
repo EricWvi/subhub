@@ -8,11 +8,11 @@
 
 Prioritize the **Mihomo (Clash Meta)** features first, as the extended syntax (like `proxy-providers` and advanced `rule-providers`) offers more native flexibility for an aggregator like SubHub.
 
-### Phase 1.5: Provider Management UI (The Interface)
+### Phase 1.5: Provider Management UI (The Interface) [COMPLETED]
 *Focus: Expose provider CRUD and refresh workflows in the frontend alongside phase 1.*
-- [ ] **Provider CRUD:** Manage provider URLs, names, and refresh intervals from the UI.
-- [ ] **Refresh Controls:** Trigger manual refreshes and show latest fetch status.
-- [ ] **Snapshot View:** Display the last known good snapshot and raw source details.
+- [x] **Provider CRUD:** Manage provider URLs, names, and refresh intervals from the UI.
+- [x] **Refresh Controls:** Trigger manual refreshes and show latest fetch status.
+- [x] **Snapshot View:** Display the last known good snapshot and raw source details.
 
 ### Phase 2: Intelligence & Logic (The Middleware)
 *Focus: Pattern matching and group automation.*
