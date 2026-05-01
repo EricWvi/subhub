@@ -3,12 +3,15 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/url"
 
 	"github.com/EricWvi/subhub/internal/config"
 )
 
 var ErrRefreshIntervalTooShort = errors.New("refresh interval must be at least 300 seconds")
 var ErrNotFound = errors.New("provider not found")
+var ErrInvalidURL = errors.New("invalid provider url")
 
 type CreateProviderInput struct {
 	Name                   string `json:"name"`
@@ -31,6 +34,9 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) Create(ctx context.Context, in CreateProviderInput) (Provider, error) {
+	if _, err := url.ParseRequestURI(in.URL); err != nil {
+		return Provider{}, fmt.Errorf("%w: %s", ErrInvalidURL, err.Error())
+	}
 	interval := in.RefreshIntervalSeconds
 	if interval == 0 {
 		interval = int64(config.DefaultRefreshInterval.Seconds())
@@ -61,6 +67,9 @@ func (s *Service) GetByID(ctx context.Context, id int64) (Provider, error) {
 }
 
 func (s *Service) Update(ctx context.Context, id int64, in UpdateProviderInput) (Provider, error) {
+	if _, err := url.ParseRequestURI(in.URL); err != nil {
+		return Provider{}, fmt.Errorf("%w: %s", ErrInvalidURL, err.Error())
+	}
 	interval := in.RefreshIntervalSeconds
 	if interval == 0 {
 		interval = int64(config.DefaultRefreshInterval.Seconds())

@@ -42,11 +42,23 @@ func TestParseSubscriptionAcceptsBase64EncodedYAML(t *testing.T) {
 func TestParseSubscriptionRejectsGarbage(t *testing.T) {
 	_, _, err := parse.DecodeAndNormalize([]byte("not valid yaml at all {{{"))
 	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported provider payload")
+}
+
+func TestParseSubscriptionRejectsMalformedPayload(t *testing.T) {
+	_, _, err := parse.DecodeAndNormalize([]byte("%%%"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported provider payload")
+}
+
+func TestParseSubscriptionRejectsEmptyProxies(t *testing.T) {
+	_, _, err := parse.DecodeAndNormalize([]byte("proxies: []\n"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported provider payload")
 }
 
 func TestParseSubscriptionEmptyPayload(t *testing.T) {
-	nodes, format, err := parse.DecodeAndNormalize([]byte(""))
-	require.NoError(t, err)
-	assert.Equal(t, "yaml", format)
-	assert.Len(t, nodes, 0)
+	_, _, err := parse.DecodeAndNormalize([]byte(""))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported provider payload")
 }

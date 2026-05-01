@@ -3,6 +3,8 @@ package parse
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
+	"fmt"
 
 	"gopkg.in/yaml.v3"
 )
@@ -39,7 +41,10 @@ func tryBase64(data []byte) ([]byte, error) {
 func parseYAML(data []byte, format string) ([]map[string]any, string, error) {
 	var schema ProxySchema
 	if err := yaml.Unmarshal(data, &schema); err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("unsupported provider payload: %w", err)
+	}
+	if len(schema.Proxies) == 0 {
+		return nil, "", errors.New("unsupported provider payload: proxies list is empty")
 	}
 	return schema.Proxies, format, nil
 }

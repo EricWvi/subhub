@@ -87,6 +87,27 @@ func createProvider(t *testing.T, baseURL, body string) int64 {
 	return result.Provider.ID
 }
 
+func TestCreateProviderRejectsInvalidURL(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	resp := postJSON(t, ts.URL+"/providers", `{"name":"alpha","url":"not-a-url"}`)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, readBody(t, resp), "invalid provider url")
+}
+
+func TestUpdateProviderRejectsInvalidURL(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	id := createProvider(t, ts.URL, `{"name":"alpha","url":"https://example.com/sub"}`)
+	resp := putJSON(t, fmt.Sprintf("%s/providers/%d", ts.URL, id), `{"name":"beta","url":"not-a-url"}`)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, readBody(t, resp), "invalid provider url")
+}
+
 func TestListProvidersStartsEmpty(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()

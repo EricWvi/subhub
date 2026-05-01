@@ -112,8 +112,10 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.service.Create(r.Context(), in)
 	if err != nil {
-		switch err {
-		case ErrRefreshIntervalTooShort:
+		switch {
+		case errors.Is(err, ErrRefreshIntervalTooShort):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, ErrInvalidURL):
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		default:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -147,10 +149,12 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request, id int6
 	}
 	p, err := h.service.Update(r.Context(), id, in)
 	if err != nil {
-		switch err {
-		case ErrRefreshIntervalTooShort:
+		switch {
+		case errors.Is(err, ErrRefreshIntervalTooShort):
 			http.Error(w, err.Error(), http.StatusBadRequest)
-		case ErrNotFound:
+		case errors.Is(err, ErrInvalidURL):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, ErrNotFound):
 			http.Error(w, err.Error(), http.StatusNotFound)
 		default:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
