@@ -1,0 +1,14 @@
+proxies:
+  - name: vmess-hk-01
+    type: vmess
+    server: hk.example.com
+    port: 443
+    uuid: 11111111-1111-1111-1111-111111111111
+    cipher: auto
+    udp: true
+  - name: ss-jp-01
+    type: ss
+    server: jp.example.com
+    port: 8388
+    cipher: aes-128-gcm
+    password: secret
