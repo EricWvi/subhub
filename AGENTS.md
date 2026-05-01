@@ -1,0 +1,1 @@
+- Do not install deps in `vendor/`, it is only for `mihomo`
