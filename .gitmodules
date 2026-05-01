@@ -1,4 +1,4 @@
-[submodule "vendor/mihomo"]
-	path = vendor/mihomo
+[submodule "mihomo"]
+	path = mihomo
 	url = https://github.com/MetaCubeX/mihomo.git
 	branch = Meta

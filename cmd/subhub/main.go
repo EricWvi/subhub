@@ -1,11 +1,11 @@
 package main
 
 import (
-	"io"
 	"log"
 	"net/http"
 
 	"github.com/EricWvi/subhub/internal/config"
+	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/store"
 )
 
@@ -14,11 +14,12 @@ func main() {
 	db := store.MustOpen(cfg.DatabasePath)
 	defer db.Close()
 
+	repo := provider.NewRepository(db)
+	svc := provider.NewService(repo)
+	handler := provider.NewHandler(svc)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/providers", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"providers":[]}`)
-	})
+	handler.RegisterRoutes(mux)
 
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, mux))
 }
