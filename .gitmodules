@@ -1,0 +1,4 @@
+[submodule "vendor/mihomo"]
+	path = vendor/mihomo
+	url = https://github.com/MetaCubeX/mihomo.git
+	branch = Meta

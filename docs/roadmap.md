@@ -3,7 +3,7 @@
 ### Phase 1: The Core Engine (Foundation)
 *Focus: Data fetching and basic YAML transformation.*
 - [ ] **Provider Manager:** Build the "Fetcher" module to handle scheduled updates and local caching (SQLite).
-- [ ] **Parser Logic:** Implement a robust YAML/Base64 parser to normalize diverse "airport" formats into a standard internal Node Schema.
+- [ ] **Parser Logic:** Implement a robust YAML/Base64 parser to normalize diverse "airport" formats into Mihomo-native `[]map[string]any` proxy payloads.
 - [ ] **Unified Output:** Create a basic API endpoint that merges fetched nodes into a static Clash template.
 
 Prioritize the **Mihomo (Clash Meta)** features first, as the extended syntax (like `proxy-providers` and advanced `rule-providers`) offers more native flexibility for an aggregator like SubHub.
@@ -16,8 +16,8 @@ Prioritize the **Mihomo (Clash Meta)** features first, as the extended syntax (l
 
 ### Phase 3: Performance & Analytics (The Backend)
 *Focus: Background health monitoring and node scoring.*
-- [ ] **Health Check Worker:** Build a background service that performs TCP/HTTP ping tests on cached nodes.
-- [ ] **Scoring Algorithm:** Develop a ranking system based on **latency + stability + success rate**.
+- [ ] **Health Check Worker:** Build a background service around Mihomo's request/health-check capabilities so cached nodes are exercised using the same runtime behavior as the downstream client stack.
+- [ ] **Scoring Algorithm:** Develop a ranking system based on **latency + stability + success rate**, using Mihomo's own ability to make requests as the measurement source.
 - [ ] **Smart Selection:** Allow the YAML generator to filter out "dead" nodes or prioritize "High-Score" nodes for specific groups.
 
 ### Phase 4: User Experience (The Interface)
@@ -48,4 +48,3 @@ Prioritize the **Mihomo (Clash Meta)** features first, as the extended syntax (l
 ### Phase 7: Edge Logic & Advanced Automation (Optional)
 - [ ] **Scripting Support:** Support for custom TypeScript/JavaScript snippets to transform node properties on-the-fly.
 - [ ] **Webhooks:** Trigger external notifications (Telegram/Discord) when a primary provider goes down or node availability drops below a specific threshold.
-
