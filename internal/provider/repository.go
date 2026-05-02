@@ -115,8 +115,17 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 	return err
 }
 
-func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerID int64, format string, nodes []map[string]any) error {
-	normalizedYAML, err := yaml.Marshal(map[string]any{"proxies": nodes})
+type ReplaceSnapshotInput struct {
+	Format       string
+	Nodes        []map[string]any
+	Used         int64
+	Total        int64
+	Expire       int64
+	HasUsageInfo bool
+}
+
+func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerID int64, in ReplaceSnapshotInput) error {
+	normalizedYAML, err := yaml.Marshal(map[string]any{"proxies": in.Nodes})
 	if err != nil {
 		return err
 	}
@@ -138,7 +147,7 @@ func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerI
 			normalized_yaml=excluded.normalized_yaml, 
 			node_count=excluded.node_count, 
 			fetched_at=excluded.fetched_at`,
-		providerID, format, string(normalizedYAML), len(nodes), nowStr,
+		providerID, in.Format, string(normalizedYAML), len(in.Nodes), nowStr,
 	)
 	if err != nil {
 		return err
@@ -153,7 +162,17 @@ func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerI
 		return err
 	}
 
-	_, err = tx.ExecContext(ctx, `UPDATE providers SET updated_at = ? WHERE id = ?`, nowStr, providerID)
+	if in.HasUsageInfo {
+		_, err = tx.ExecContext(ctx,
+			`UPDATE providers SET used = ?, total = ?, expire = ?, updated_at = ? WHERE id = ?`,
+			in.Used, in.Total, in.Expire, nowStr, providerID,
+		)
+	} else {
+		_, err = tx.ExecContext(ctx,
+			`UPDATE providers SET used = 0, total = 0, expire = 0, updated_at = ? WHERE id = ?`,
+			nowStr, providerID,
+		)
+	}
 	if err != nil {
 		return err
 	}

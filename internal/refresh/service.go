@@ -27,15 +27,17 @@ func (s *Service) RefreshProvider(ctx context.Context, providerID int64) error {
 	}
 
 	log.Printf("[REFRESH] Fetching from %s", p.URL)
-	payload, err := s.fetcher.Fetch(ctx, p.URL)
+	fetchResp, err := s.fetcher.Fetch(ctx, p.URL)
 	if err != nil {
 		log.Printf("[REFRESH] Fetch failed for provider %d: %v", providerID, err)
 		_ = s.providers.RecordRefreshFailure(ctx, providerID, err.Error())
 		return &provider.RefreshFailedError{Message: err.Error()}
 	}
 
+	info, hasInfo := fetch.ParseSubscriptionUserinfo(fetchResp.Headers.Get("Subscription-Userinfo"))
+
 	log.Printf("[REFRESH] Parsing payload for provider %d", providerID)
-	nodes, format, err := parse.DecodeAndNormalize(payload)
+	nodes, format, err := parse.DecodeAndNormalize(fetchResp.Body)
 	if err != nil {
 		log.Printf("[REFRESH] Parse failed for provider %d: %v", providerID, err)
 		_ = s.providers.RecordRefreshFailure(ctx, providerID, err.Error())
@@ -43,7 +45,14 @@ func (s *Service) RefreshProvider(ctx context.Context, providerID int64) error {
 	}
 
 	log.Printf("[REFRESH] Saving %d nodes for provider %d (format: %s)", len(nodes), providerID, format)
-	err = s.providers.ReplaceLastKnownGoodSnapshot(ctx, providerID, format, nodes)
+	err = s.providers.ReplaceLastKnownGoodSnapshot(ctx, providerID, provider.ReplaceSnapshotInput{
+		Format:       format,
+		Nodes:        nodes,
+		Used:         info.Used,
+		Total:        info.Total,
+		Expire:       info.Expire,
+		HasUsageInfo: hasInfo,
+	})
 	if err != nil {
 		log.Printf("[REFRESH] Save snapshot failed for provider %d: %v", providerID, err)
 		return err

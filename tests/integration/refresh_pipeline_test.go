@@ -225,6 +225,32 @@ func TestMihomoOutputContainsNodesFromAllProviders(t *testing.T) {
 	assert.Contains(t, body, "rules:")
 }
 
+func TestRefreshPersistsLatestSubscriptionUserinfo(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
+	require.NoError(t, err)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Subscription-Userinfo", "upload=1024; download=2048; total=4096; expire=1893456000")
+		w.Header().Set("Content-Type", "text/yaml")
+		_, _ = w.Write(fixture)
+	}))
+	defer upstream.Close()
+
+	ts, repo := newTestServerWithRefresh(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"alpha","url":"%s"}`, upstream.URL))
+	resp := refreshProvider(t, ts.URL, providerID)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	p, err := repo.GetByID(context.Background(), providerID)
+	require.NoError(t, err)
+	assert.EqualValues(t, 3072, p.Used)
+	assert.EqualValues(t, 4096, p.Total)
+	assert.EqualValues(t, 1893456000, p.Expire)
+}
+
 func TestMihomoOutputEmptyWhenNoSnapshots(t *testing.T) {
 	ts, _ := newTestServerWithRefresh(t)
 	defer ts.Close()
