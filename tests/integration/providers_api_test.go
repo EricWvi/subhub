@@ -222,3 +222,24 @@ func TestUpdateAndDeleteProvider(t *testing.T) {
 	defer getResp.Body.Close()
 	assert.Equal(t, http.StatusNotFound, getResp.StatusCode)
 }
+
+func TestDeleteProviderRejectsSubscriptionReference(t *testing.T) {
+	ts := newTestServerWithSubscriptions(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, `{"name":"alpha","url":"https://example.com/a"}`)
+	groupID := createProxyGroup(t, ts.URL, `{"name":"Streaming","script":""}`)
+
+	resp := postJSON(t, ts.URL+"/api/subscriptions/proxy-providers", fmt.Sprintf(`{
+		"name":"Provider Export",
+		"providers":[%d],
+		"internal_proxy_group_id":%d
+	}`, providerID, groupID))
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	deleteResp := deleteRequest(t, fmt.Sprintf("%s/api/providers/%d", ts.URL, providerID))
+	defer deleteResp.Body.Close()
+	assert.Equal(t, http.StatusConflict, deleteResp.StatusCode)
+	assert.Contains(t, readBody(t, deleteResp), "subscription")
+}

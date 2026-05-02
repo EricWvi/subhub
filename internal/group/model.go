@@ -15,3 +15,10 @@ type ProxyNodeView struct {
 	ProviderName string `json:"providerName"`
 	Name         string `json:"name"`
 }
+
+type ResolvedNode struct {
+	ID         int64  `json:"id"`
+	ProviderID int64  `json:"provider_id"`
+	Name       string `json:"name"`
+	RawYAML    string `json:"raw_yaml"`
+}

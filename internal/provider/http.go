@@ -219,7 +219,14 @@ func (h *Handler) deleteProvider(w http.ResponseWriter, r *http.Request, id int6
 	err := h.service.Delete(r.Context(), id)
 	if err != nil {
 		log.Printf("[API] Delete provider %d failed: %v", id, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		switch {
+		case errors.Is(err, ErrSubscriptionProviderRef):
+			http.Error(w, err.Error(), http.StatusConflict)
+		case errors.Is(err, ErrNotFound):
+			http.Error(w, "provider not found", http.StatusNotFound)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 	log.Printf("[API] Deleted provider %d", id)

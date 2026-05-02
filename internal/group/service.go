@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type CreateGroupInput struct {
@@ -89,4 +91,55 @@ func (s *Service) selectNodes(script string, nodes []ProxyNodeView) ([]ProxyNode
 		selected = append(selected, byID[id])
 	}
 	return selected, nil
+}
+
+func (s *Service) ResolveNodesForOutput(ctx context.Context, groupID int64, allowedProviderIDs []int64) ([]string, []map[string]any, error) {
+	g, err := s.repo.GetByID(ctx, groupID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rawNodes, err := s.repo.ListRawNodesByProviders(ctx, allowedProviderIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(rawNodes) == 0 {
+		return nil, nil, nil
+	}
+
+	var filteredNodes []ResolvedNode
+	if strings.TrimSpace(g.Script) != "" {
+		var views []ProxyNodeView
+		for _, n := range rawNodes {
+			views = append(views, ProxyNodeView{ID: n.ID, Name: n.Name})
+		}
+		selectedIDs, err := SelectNodeIDs(g.Script, views)
+		if err != nil {
+			filteredNodes = rawNodes
+		} else {
+			idSet := map[int64]bool{}
+			for _, id := range selectedIDs {
+				idSet[id] = true
+			}
+			for _, n := range rawNodes {
+				if idSet[n.ID] {
+					filteredNodes = append(filteredNodes, n)
+				}
+			}
+		}
+	} else {
+		filteredNodes = rawNodes
+	}
+
+	var names []string
+	var nodes []map[string]any
+	for _, n := range filteredNodes {
+		var node map[string]any
+		if err := yaml.Unmarshal([]byte(n.RawYAML), &node); err != nil {
+			continue
+		}
+		names = append(names, n.Name)
+		nodes = append(nodes, node)
+	}
+	return names, nodes, nil
 }

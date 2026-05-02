@@ -13,7 +13,10 @@ import (
 var ErrRefreshIntervalTooShort = errors.New("refresh interval must be at least 5 minutes")
 var ErrNotFound = errors.New("provider not found")
 var ErrInvalidURL = errors.New("invalid provider url")
+var ErrSubscriptionProviderRef = errors.New("provider is referenced by a subscription")
 var errInvalidAbbrev = errors.New("abbrev must contain uppercase letters only")
+
+type SubscriptionReferenceChecker func(ctx context.Context, providerID int64) (bool, error)
 
 func normalizeAbbrev(raw string) (string, error) {
 	upper := strings.ToUpper(strings.TrimSpace(raw))
@@ -43,7 +46,8 @@ type UpdateProviderInput struct {
 }
 
 type Service struct {
-	repo *Repository
+	repo            *Repository
+	subRefChecker   SubscriptionReferenceChecker
 }
 
 func NewService(repo *Repository) *Service {
@@ -117,7 +121,20 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateProviderInput) 
 	return s.repo.Update(ctx, p)
 }
 
+func (s *Service) SetSubscriptionReferenceChecker(checker SubscriptionReferenceChecker) {
+	s.subRefChecker = checker
+}
+
 func (s *Service) Delete(ctx context.Context, id int64) error {
+	if s.subRefChecker != nil {
+		used, err := s.subRefChecker(ctx, id)
+		if err != nil {
+			return err
+		}
+		if used {
+			return ErrSubscriptionProviderRef
+		}
+	}
 	return s.repo.Delete(ctx, id)
 }
 

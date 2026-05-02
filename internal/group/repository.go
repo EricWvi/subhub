@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -115,6 +117,37 @@ func (r *Repository) ListProxyNodeViews(ctx context.Context) ([]ProxyNodeView, e
 			return nil, err
 		}
 		nodes = append(nodes, node)
+	}
+	return nodes, rows.Err()
+}
+
+func (r *Repository) ListRawNodesByProviders(ctx context.Context, providerIDs []int64) ([]ResolvedNode, error) {
+	if len(providerIDs) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(providerIDs))
+	args := make([]any, len(providerIDs))
+	for i, id := range providerIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := fmt.Sprintf(
+		`SELECT n.id, n.provider_id, n.name, n.raw_yaml FROM proxy_nodes n WHERE n.provider_id IN (%s) ORDER BY n.provider_id, n.id`,
+		strings.Join(placeholders, ","),
+	)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var nodes []ResolvedNode
+	for rows.Next() {
+		var n ResolvedNode
+		if err := rows.Scan(&n.ID, &n.ProviderID, &n.Name, &n.RawYAML); err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, n)
 	}
 	return nodes, rows.Err()
 }

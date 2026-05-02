@@ -14,6 +14,7 @@ import (
 	"github.com/EricWvi/subhub/internal/refresh"
 	"github.com/EricWvi/subhub/internal/rule"
 	"github.com/EricWvi/subhub/internal/store"
+	"github.com/EricWvi/subhub/internal/subscription"
 )
 
 func main() {
@@ -39,11 +40,18 @@ func main() {
 
 	outputHandler := output.NewHandler(repo, ruleRepo, "tests/fixtures/template.yaml")
 
+	subscriptionRepo := subscription.NewRepository(db)
+	subscriptionSvc := subscription.NewService(subscriptionRepo, repo, groupSvc, ruleRepo, "tests/fixtures/client_sub.yaml")
+	subscriptionHandler := subscription.NewHandler(subscriptionSvc)
+
+	svc.SetSubscriptionReferenceChecker(subscriptionSvc.ProviderReferencedByAnySubscription)
+
 	apiMux := http.NewServeMux()
 	handler.RegisterRoutes(apiMux)
 	groupHandler.RegisterRoutes(apiMux)
 	ruleHandler.RegisterRoutes(apiMux)
 	outputHandler.RegisterRoutes(apiMux)
+	subscriptionHandler.RegisterRoutes(apiMux)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", apiMux))

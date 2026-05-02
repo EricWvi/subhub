@@ -189,3 +189,59 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 	}
 	return nil
 }
+
+type RuleOutputRow struct {
+	ID             int64
+	RuleType       string
+	Pattern        string
+	TargetKind     string
+	ProxyGroupID   sql.NullInt64
+	ProxyGroupName sql.NullString
+}
+
+func (r *Repository) ListForInternalGroup(ctx context.Context, groupID int64) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT r.rule_type, r.pattern,
+		        CASE WHEN r.target_kind = 'PROXY_GROUP' THEN pg.name ELSE r.target_kind END AS proxy_group
+		 FROM rules r
+		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
+		 WHERE r.proxy_group_id = ?
+		 ORDER BY r.id ASC`, groupID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []string
+	for rows.Next() {
+		var ruleType, pattern, proxyGroup string
+		if err := rows.Scan(&ruleType, &pattern, &proxyGroup); err != nil {
+			return nil, err
+		}
+		rules = append(rules, ruleType+","+pattern+","+proxyGroup)
+	}
+	return rules, rows.Err()
+}
+
+func (r *Repository) ListAscendingForOutput(ctx context.Context) ([]RuleOutputRow, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT r.id, r.rule_type, r.pattern, r.target_kind, r.proxy_group_id, pg.name
+		 FROM rules r
+		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
+		 ORDER BY r.id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []RuleOutputRow
+	for rows.Next() {
+		var r RuleOutputRow
+		if err := rows.Scan(&r.ID, &r.RuleType, &r.Pattern, &r.TargetKind, &r.ProxyGroupID, &r.ProxyGroupName); err != nil {
+			return nil, err
+		}
+		rules = append(rules, r)
+	}
+	return rules, rows.Err()
+}
