@@ -71,7 +71,7 @@ func newTestServerWithRefreshAndGroups(t *testing.T) (*httptest.Server, *provide
 	handler.SetRefresher(refreshSvc.RefreshProvider)
 
 	templatePath := filepath.Join("..", "fixtures", "template.yaml")
-	outputHandler := output.NewHandler(repo, templatePath)
+	outputHandler := output.NewHandler(repo, nil, templatePath)
 
 	groupRepo := group.NewRepository(db)
 	groupSvc := group.NewService(groupRepo)

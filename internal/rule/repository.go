@@ -154,6 +154,30 @@ func (r *Repository) Update(ctx context.Context, id int64, rec CreateRuleRecord)
 	return r.GetByID(ctx, id)
 }
 
+func (r *Repository) ListForOutput(ctx context.Context) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT r.rule_type, r.pattern,
+		        CASE WHEN r.target_kind = 'PROXY_GROUP' THEN pg.name ELSE r.target_kind END AS proxy_group
+		 FROM rules r
+		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
+		 ORDER BY r.id DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []string
+	for rows.Next() {
+		var ruleType, pattern, proxyGroup string
+		if err := rows.Scan(&ruleType, &pattern, &proxyGroup); err != nil {
+			return nil, err
+		}
+		rules = append(rules, ruleType+","+pattern+","+proxyGroup)
+	}
+	return rules, rows.Err()
+}
+
 func (r *Repository) Delete(ctx context.Context, id int64) error {
 	result, err := r.db.ExecContext(ctx, `DELETE FROM rules WHERE id = ?`, id)
 	if err != nil {

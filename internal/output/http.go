@@ -6,15 +6,17 @@ import (
 
 	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/render"
+	"github.com/EricWvi/subhub/internal/rule"
 )
 
 type Handler struct {
 	providers    *provider.Repository
+	rules        *rule.Repository
 	templatePath string
 }
 
-func NewHandler(providers *provider.Repository, templatePath string) *Handler {
-	return &Handler{providers: providers, templatePath: templatePath}
+func NewHandler(providers *provider.Repository, rules *rule.Repository, templatePath string) *Handler {
+	return &Handler{providers: providers, rules: rules, templatePath: templatePath}
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -31,7 +33,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	out, err := render.MihomoTemplate(h.templatePath, nodes)
+	var manualRules []string
+	if h.rules != nil {
+		manualRules, err = h.rules.ListForOutput(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	out, err := render.MihomoTemplate(h.templatePath, nodes, manualRules)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

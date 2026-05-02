@@ -37,7 +37,7 @@ func main() {
 	ruleSvc := rule.NewService(ruleRepo)
 	ruleHandler := rule.NewHandler(ruleSvc)
 
-	outputHandler := output.NewHandler(repo, "tests/fixtures/template.yaml")
+	outputHandler := output.NewHandler(repo, ruleRepo, "tests/fixtures/template.yaml")
 
 	apiMux := http.NewServeMux()
 	handler.RegisterRoutes(apiMux)

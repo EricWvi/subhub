@@ -13,9 +13,11 @@ import (
 
 	"github.com/EricWvi/subhub/internal/config"
 	"github.com/EricWvi/subhub/internal/fetch"
+	"github.com/EricWvi/subhub/internal/group"
 	"github.com/EricWvi/subhub/internal/output"
 	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/refresh"
+	"github.com/EricWvi/subhub/internal/rule"
 	"github.com/EricWvi/subhub/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +44,7 @@ func newTestServerWithRefresh(t *testing.T) (*httptest.Server, *provider.Reposit
 	handler.SetRefresher(refreshSvc.RefreshProvider)
 
 	templatePath := filepath.Join("..", "fixtures", "template.yaml")
-	outputHandler := output.NewHandler(repo, templatePath)
+	outputHandler := output.NewHandler(repo, nil, templatePath)
 
 	apiMux := http.NewServeMux()
 	handler.RegisterRoutes(apiMux)
@@ -332,4 +334,68 @@ func TestMihomoOutputEmptyWhenNoSnapshots(t *testing.T) {
 
 	body := readBody(t, resp)
 	assert.Contains(t, body, "proxies: []")
+}
+
+func newTestServerWithRefreshAndRules(t *testing.T) (*httptest.Server, *provider.Repository) {
+	t.Helper()
+	dir := t.TempDir()
+	cfg := config.Config{
+		ListenAddr:             ":0",
+		DatabasePath:           filepath.Join(dir, "test.db"),
+		UpstreamRequestTimeout: 5 * time.Second,
+		DefaultRefreshInterval: config.DefaultRefreshInterval,
+	}
+	db := store.MustOpen(cfg.DatabasePath)
+	t.Cleanup(func() { db.Close() })
+
+	providerRepo := provider.NewRepository(db)
+	providerSvc := provider.NewService(providerRepo)
+	providerHandler := provider.NewHandler(providerSvc)
+
+	ruleRepo := rule.NewRepository(db)
+
+	groupRepo := group.NewRepository(db)
+	groupSvc := group.NewService(groupRepo)
+	groupHandler := group.NewHandler(groupSvc)
+
+	fetcher := fetch.NewClient(cfg.UpstreamRequestTimeout)
+	refreshSvc := refresh.NewService(providerRepo, fetcher)
+	providerHandler.SetRefresher(refreshSvc.RefreshProvider)
+
+	outputHandler := output.NewHandler(providerRepo, ruleRepo, filepath.Join("..", "fixtures", "template.yaml"))
+
+	apiMux := http.NewServeMux()
+	providerHandler.RegisterRoutes(apiMux)
+	groupHandler.RegisterRoutes(apiMux)
+	ruleHandler := rule.NewHandler(rule.NewService(ruleRepo))
+	ruleHandler.RegisterRoutes(apiMux)
+	outputHandler.RegisterRoutes(apiMux)
+
+	mux := http.NewServeMux()
+	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
+	return httptest.NewServer(mux), providerRepo
+}
+
+func TestMihomoOutputIncludesManualRules(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
+	require.NoError(t, err)
+
+	upstream := newFlakyUpstream(t, fixture)
+	ts, _ := newTestServerWithRefreshAndRules(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"alpha","url":"%s"}`, upstream.server.URL))
+	refreshResp := refreshProvider(t, ts.URL, providerID)
+	defer refreshResp.Body.Close()
+	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
+
+	postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"openai.com","proxy_group":"DIRECT"}`).Body.Close()
+
+	resp, err := http.Get(ts.URL + "/api/subscriptions/mihomo")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body := readBody(t, resp)
+	assert.Contains(t, body, "DOMAIN-SUFFIX,openai.com,DIRECT")
+	assert.Contains(t, body, "DOMAIN-SUFFIX,google.com,PROXY")
 }
