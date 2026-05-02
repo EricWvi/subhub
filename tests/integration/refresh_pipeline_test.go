@@ -44,9 +44,12 @@ func newTestServerWithRefresh(t *testing.T) (*httptest.Server, *provider.Reposit
 	templatePath := filepath.Join("..", "fixtures", "template.yaml")
 	outputHandler := output.NewHandler(repo, templatePath)
 
+	apiMux := http.NewServeMux()
+	handler.RegisterRoutes(apiMux)
+	outputHandler.RegisterRoutes(apiMux)
+
 	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-	outputHandler.RegisterRoutes(mux)
+	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 	return httptest.NewServer(mux), repo
 }
 
@@ -75,7 +78,7 @@ func newFlakyUpstream(t *testing.T, payload []byte) *flakyUpstream {
 
 func refreshProvider(t *testing.T, baseURL string, providerID int64) *http.Response {
 	t.Helper()
-	resp, err := http.Post(fmt.Sprintf("%s/providers/%d/refresh", baseURL, providerID), "application/json", nil)
+	resp, err := http.Post(fmt.Sprintf("%s/api/providers/%d/refresh", baseURL, providerID), "application/json", nil)
 	require.NoError(t, err)
 	return resp
 }
@@ -212,7 +215,7 @@ func TestMihomoOutputContainsNodesFromAllProviders(t *testing.T) {
 	defer refreshResp.Body.Close()
 	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
 
-	mihomoResp, err := http.Get(ts.URL + "/subscriptions/mihomo")
+	mihomoResp, err := http.Get(ts.URL + "/api/subscriptions/mihomo")
 	require.NoError(t, err)
 	defer mihomoResp.Body.Close()
 	assert.Equal(t, http.StatusOK, mihomoResp.StatusCode)
@@ -309,7 +312,7 @@ func TestMihomoOutputUsesCanonicalProxyNodes(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, nodes)
 
-	mihomoResp, err := http.Get(ts.URL + "/subscriptions/mihomo")
+	mihomoResp, err := http.Get(ts.URL + "/api/subscriptions/mihomo")
 	require.NoError(t, err)
 	defer mihomoResp.Body.Close()
 
@@ -322,7 +325,7 @@ func TestMihomoOutputEmptyWhenNoSnapshots(t *testing.T) {
 	ts, _ := newTestServerWithRefresh(t)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/subscriptions/mihomo")
+	resp, err := http.Get(ts.URL + "/api/subscriptions/mihomo")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)

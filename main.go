@@ -28,16 +28,19 @@ func main() {
 	refreshSvc := refresh.NewService(repo, fetcher)
 	handler.SetRefresher(refreshSvc.RefreshProvider)
 
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	outputHandler := output.NewHandler(repo, "tests/fixtures/template.yaml")
-	outputHandler.RegisterRoutes(mux)
-
 	groupRepo := group.NewRepository(db)
 	groupSvc := group.NewService(groupRepo)
 	groupHandler := group.NewHandler(groupSvc)
-	groupHandler.RegisterRoutes(mux)
+
+	outputHandler := output.NewHandler(repo, "tests/fixtures/template.yaml")
+
+	apiMux := http.NewServeMux()
+	handler.RegisterRoutes(apiMux)
+	groupHandler.RegisterRoutes(apiMux)
+	outputHandler.RegisterRoutes(apiMux)
+
+	mux := http.NewServeMux()
+	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 
 	scheduler := refresh.NewScheduler(repo, refreshSvc.RefreshProvider, time.Minute)
 	go scheduler.Start(context.Background())

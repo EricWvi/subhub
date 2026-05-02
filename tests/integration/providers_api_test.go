@@ -34,8 +34,11 @@ func newTestServer(t *testing.T) *httptest.Server {
 	svc := provider.NewService(repo)
 	handler := provider.NewHandler(svc)
 
+	apiMux := http.NewServeMux()
+	handler.RegisterRoutes(apiMux)
+
 	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
+	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 	return httptest.NewServer(mux)
 }
 
@@ -74,7 +77,7 @@ func deleteRequest(t *testing.T, url string) *http.Response {
 
 func createProvider(t *testing.T, baseURL, body string) int64 {
 	t.Helper()
-	resp := postJSON(t, baseURL+"/providers", body)
+	resp := postJSON(t, baseURL+"/api/providers", body)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	var result struct {
@@ -91,7 +94,7 @@ func TestCreateProviderRejectsInvalidURL(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()
 
-	resp := postJSON(t, ts.URL+"/providers", `{"name":"alpha","url":"not-a-url"}`)
+	resp := postJSON(t, ts.URL+"/api/providers", `{"name":"alpha","url":"not-a-url"}`)
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	assert.Contains(t, readBody(t, resp), "invalid provider url")
@@ -102,7 +105,7 @@ func TestUpdateProviderRejectsInvalidURL(t *testing.T) {
 	defer ts.Close()
 
 	id := createProvider(t, ts.URL, `{"name":"alpha","url":"https://example.com/sub"}`)
-	resp := putJSON(t, fmt.Sprintf("%s/providers/%d", ts.URL, id), `{"name":"beta","url":"not-a-url"}`)
+	resp := putJSON(t, fmt.Sprintf("%s/api/providers/%d", ts.URL, id), `{"name":"beta","url":"not-a-url"}`)
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	assert.Contains(t, readBody(t, resp), "invalid provider url")
@@ -112,7 +115,7 @@ func TestListProvidersStartsEmpty(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/providers")
+	resp, err := http.Get(ts.URL + "/api/providers")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -125,7 +128,7 @@ func TestCreateProviderUsesDefaultRefreshInterval(t *testing.T) {
 	defer ts.Close()
 
 	body := `{"name":"alpha","url":"https://example.com/sub"}`
-	resp := postJSON(t, ts.URL+"/providers", body)
+	resp := postJSON(t, ts.URL+"/api/providers", body)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -144,7 +147,7 @@ func TestCreateProviderReturnsPhase2MetadataFields(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()
 
-	resp := postJSON(t, ts.URL+"/providers", `{"name":"alpha","url":"https://example.com/sub","abbrev":"HK"}`)
+	resp := postJSON(t, ts.URL+"/api/providers", `{"name":"alpha","url":"https://example.com/sub","abbrev":"HK"}`)
 	defer resp.Body.Close()
 
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -168,15 +171,15 @@ func TestCreateProviderUppercasesAbbrevAndAllowsDuplicates(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()
 
-	first := postJSON(t, ts.URL+"/providers", `{"name":"alpha","url":"https://example.com/a","abbrev":"hk"}`)
+	first := postJSON(t, ts.URL+"/api/providers", `{"name":"alpha","url":"https://example.com/a","abbrev":"hk"}`)
 	defer first.Body.Close()
 	require.Equal(t, http.StatusCreated, first.StatusCode)
 
-	second := postJSON(t, ts.URL+"/providers", `{"name":"beta","url":"https://example.com/b","abbrev":"HK"}`)
+	second := postJSON(t, ts.URL+"/api/providers", `{"name":"beta","url":"https://example.com/b","abbrev":"HK"}`)
 	defer second.Body.Close()
 	require.Equal(t, http.StatusCreated, second.StatusCode)
 
-	listResp, err := http.Get(ts.URL + "/providers")
+	listResp, err := http.Get(ts.URL + "/api/providers")
 	require.NoError(t, err)
 	defer listResp.Body.Close()
 	assert.Contains(t, readBody(t, listResp), `"abbrev":"HK"`)
@@ -187,7 +190,7 @@ func TestUpdateProviderRejectsNonLetterAbbrev(t *testing.T) {
 	defer ts.Close()
 
 	id := createProvider(t, ts.URL, `{"name":"alpha","url":"https://example.com/sub","abbrev":"HK"}`)
-	resp := putJSON(t, fmt.Sprintf("%s/providers/%d", ts.URL, id), `{"name":"alpha","url":"https://example.com/sub","abbrev":"H1"}`)
+	resp := putJSON(t, fmt.Sprintf("%s/api/providers/%d", ts.URL, id), `{"name":"alpha","url":"https://example.com/sub","abbrev":"H1"}`)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -200,7 +203,7 @@ func TestUpdateAndDeleteProvider(t *testing.T) {
 
 	id := createProvider(t, ts.URL, `{"name":"alpha","url":"https://example.com/sub"}`)
 
-	putResp := putJSON(t, fmt.Sprintf("%s/providers/%d", ts.URL, id), `{"name":"beta","url":"https://example.net/sub","refresh_interval_minutes":60}`)
+	putResp := putJSON(t, fmt.Sprintf("%s/api/providers/%d", ts.URL, id), `{"name":"beta","url":"https://example.net/sub","refresh_interval_minutes":60}`)
 	defer putResp.Body.Close()
 	assert.Equal(t, http.StatusOK, putResp.StatusCode)
 
@@ -210,11 +213,11 @@ func TestUpdateAndDeleteProvider(t *testing.T) {
 	assert.Equal(t, "beta", result["provider"]["name"])
 	assert.Equal(t, float64(60), result["provider"]["refresh_interval_minutes"])
 
-	delResp := deleteRequest(t, fmt.Sprintf("%s/providers/%d", ts.URL, id))
+	delResp := deleteRequest(t, fmt.Sprintf("%s/api/providers/%d", ts.URL, id))
 	defer delResp.Body.Close()
 	assert.Equal(t, http.StatusNoContent, delResp.StatusCode)
 
-	getResp, err := http.Get(fmt.Sprintf("%s/providers/%d", ts.URL, id))
+	getResp, err := http.Get(fmt.Sprintf("%s/api/providers/%d", ts.URL, id))
 	require.NoError(t, err)
 	defer getResp.Body.Close()
 	assert.Equal(t, http.StatusNotFound, getResp.StatusCode)

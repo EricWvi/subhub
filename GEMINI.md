@@ -1,1 +1,1 @@
-- use 24h formats
+AGENTS.md

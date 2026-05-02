@@ -45,7 +45,9 @@ config.Load → store.MustOpen (SQLite) → provider.Repository → provider.Ser
 - **Refresh injection:** `provider.Handler.SetRefresher(RefreshProviderFunc)` avoids circular deps between `provider` and `refresh` packages.
 - **Test proxy maps** are `[]map[string]any`, not structs — this is the Mihomo-native format throughout.
 - All struct definitions must include `json` tags.
+- all API paths should start with `/api`
 - use `Asia/Shanghai` as Timezone
+- use 24h formats
 
 ## Testing
 

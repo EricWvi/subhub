@@ -41,9 +41,12 @@ func newTestServerWithGroups(t *testing.T) *httptest.Server {
 	groupSvc := group.NewService(groupRepo)
 	groupHandler := group.NewHandler(groupSvc)
 
+	apiMux := http.NewServeMux()
+	handler.RegisterRoutes(apiMux)
+	groupHandler.RegisterRoutes(apiMux)
+
 	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-	groupHandler.RegisterRoutes(mux)
+	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 	return httptest.NewServer(mux)
 }
 
@@ -74,10 +77,13 @@ func newTestServerWithRefreshAndGroups(t *testing.T) (*httptest.Server, *provide
 	groupSvc := group.NewService(groupRepo)
 	groupHandler := group.NewHandler(groupSvc)
 
+	apiMux := http.NewServeMux()
+	handler.RegisterRoutes(apiMux)
+	outputHandler.RegisterRoutes(apiMux)
+	groupHandler.RegisterRoutes(apiMux)
+
 	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-	outputHandler.RegisterRoutes(mux)
-	groupHandler.RegisterRoutes(mux)
+	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 	return httptest.NewServer(mux), repo
 }
 
@@ -85,7 +91,7 @@ func TestListProxyGroupsStartsEmpty(t *testing.T) {
 	ts := newTestServerWithGroups(t)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/proxy-groups")
+	resp, err := http.Get(ts.URL + "/api/proxy-groups")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -97,7 +103,7 @@ func TestCreateGetUpdateDeleteProxyGroup(t *testing.T) {
 	ts := newTestServerWithGroups(t)
 	defer ts.Close()
 
-	createResp := postJSON(t, ts.URL+"/proxy-groups", `{"name":"OpenAI","script":"function (proxyNodes) { return proxyNodes.map(function (node) { return node.id }) }"}`)
+	createResp := postJSON(t, ts.URL+"/api/proxy-groups", `{"name":"OpenAI","script":"function (proxyNodes) { return proxyNodes.map(function (node) { return node.id }) }"}`)
 	defer createResp.Body.Close()
 	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
@@ -112,18 +118,18 @@ func TestCreateGetUpdateDeleteProxyGroup(t *testing.T) {
 	assert.Equal(t, "OpenAI", created.Group.Name)
 	assert.Contains(t, created.Group.Script, "return node.id")
 
-	getResp, err := http.Get(fmt.Sprintf("%s/proxy-groups/%d", ts.URL, created.Group.ID))
+	getResp, err := http.Get(fmt.Sprintf("%s/api/proxy-groups/%d", ts.URL, created.Group.ID))
 	require.NoError(t, err)
 	defer getResp.Body.Close()
 	assert.Equal(t, http.StatusOK, getResp.StatusCode)
 	assert.Contains(t, readBody(t, getResp), `"name":"OpenAI"`)
 
-	updateResp := putJSON(t, fmt.Sprintf("%s/proxy-groups/%d", ts.URL, created.Group.ID), `{"name":"Streaming","script":""}`)
+	updateResp := putJSON(t, fmt.Sprintf("%s/api/proxy-groups/%d", ts.URL, created.Group.ID), `{"name":"Streaming","script":""}`)
 	defer updateResp.Body.Close()
 	assert.Equal(t, http.StatusOK, updateResp.StatusCode)
 	assert.Contains(t, readBody(t, updateResp), `"script":""`)
 
-	deleteResp := deleteRequest(t, fmt.Sprintf("%s/proxy-groups/%d", ts.URL, created.Group.ID))
+	deleteResp := deleteRequest(t, fmt.Sprintf("%s/api/proxy-groups/%d", ts.URL, created.Group.ID))
 	defer deleteResp.Body.Close()
 	assert.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
 }
@@ -141,7 +147,7 @@ func TestProxyGroupWithoutScriptReturnsAllProxyNodes(t *testing.T) {
 	defer refreshResp.Body.Close()
 	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
 
-	createResp := postJSON(t, ts.URL+"/proxy-groups", `{"name":"All Nodes","script":""}`)
+	createResp := postJSON(t, ts.URL+"/api/proxy-groups", `{"name":"All Nodes","script":""}`)
 	defer createResp.Body.Close()
 	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
@@ -152,7 +158,7 @@ func TestProxyGroupWithoutScriptReturnsAllProxyNodes(t *testing.T) {
 	}
 	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
 
-	nodesResp, err := http.Get(fmt.Sprintf("%s/proxy-groups/%d/nodes", ts.URL, created.Group.ID))
+	nodesResp, err := http.Get(fmt.Sprintf("%s/api/proxy-groups/%d/nodes", ts.URL, created.Group.ID))
 	require.NoError(t, err)
 	defer nodesResp.Body.Close()
 	require.Equal(t, http.StatusOK, nodesResp.StatusCode)
@@ -184,7 +190,7 @@ func TestProxyGroupScriptFiltersNodesByReturnedIDs(t *testing.T) {
 	defer refreshResp.Body.Close()
 	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
 
-	createResp := postJSON(t, ts.URL+"/proxy-groups", `{"name":"Filtered","script":"function (proxyNodes) { return [proxyNodes[1].id] }"}`)
+	createResp := postJSON(t, ts.URL+"/api/proxy-groups", `{"name":"Filtered","script":"function (proxyNodes) { return [proxyNodes[1].id] }"}`)
 	defer createResp.Body.Close()
 	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
@@ -195,7 +201,7 @@ func TestProxyGroupScriptFiltersNodesByReturnedIDs(t *testing.T) {
 	}
 	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
 
-	nodesResp, err := http.Get(fmt.Sprintf("%s/proxy-groups/%d/nodes", ts.URL, created.Group.ID))
+	nodesResp, err := http.Get(fmt.Sprintf("%s/api/proxy-groups/%d/nodes", ts.URL, created.Group.ID))
 	require.NoError(t, err)
 	defer nodesResp.Body.Close()
 
@@ -223,7 +229,7 @@ func TestProxyGroupScriptErrorFallsBackToAllProxyNodes(t *testing.T) {
 	defer refreshResp.Body.Close()
 	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
 
-	createResp := postJSON(t, ts.URL+"/proxy-groups", `{"name":"Broken","script":"function (proxyNodes) { throw new Error('boom') }"}`)
+	createResp := postJSON(t, ts.URL+"/api/proxy-groups", `{"name":"Broken","script":"function (proxyNodes) { throw new Error('boom') }"}`)
 	defer createResp.Body.Close()
 	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
@@ -234,7 +240,7 @@ func TestProxyGroupScriptErrorFallsBackToAllProxyNodes(t *testing.T) {
 	}
 	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
 
-	nodesResp, err := http.Get(fmt.Sprintf("%s/proxy-groups/%d/nodes", ts.URL, created.Group.ID))
+	nodesResp, err := http.Get(fmt.Sprintf("%s/api/proxy-groups/%d/nodes", ts.URL, created.Group.ID))
 	require.NoError(t, err)
 	defer nodesResp.Body.Close()
 
@@ -251,9 +257,9 @@ func TestUpdatingOneGroupScriptDoesNotChangeOtherGroups(t *testing.T) {
 	ts := newTestServerWithGroups(t)
 	defer ts.Close()
 
-	firstResp := postJSON(t, ts.URL+"/proxy-groups", `{"name":"First","script":"function (proxyNodes) { return [] }"}`)
+	firstResp := postJSON(t, ts.URL+"/api/proxy-groups", `{"name":"First","script":"function (proxyNodes) { return [] }"}`)
 	defer firstResp.Body.Close()
-	secondResp := postJSON(t, ts.URL+"/proxy-groups", `{"name":"Second","script":"function (proxyNodes) { return proxyNodes.map(function (node) { return node.id }) }"}`)
+	secondResp := postJSON(t, ts.URL+"/api/proxy-groups", `{"name":"Second","script":"function (proxyNodes) { return proxyNodes.map(function (node) { return node.id }) }"}`)
 	defer secondResp.Body.Close()
 
 	var first struct {
@@ -269,11 +275,11 @@ func TestUpdatingOneGroupScriptDoesNotChangeOtherGroups(t *testing.T) {
 	require.NoError(t, json.NewDecoder(firstResp.Body).Decode(&first))
 	require.NoError(t, json.NewDecoder(secondResp.Body).Decode(&second))
 
-	updateResp := putJSON(t, fmt.Sprintf("%s/proxy-groups/%d", ts.URL, first.Group.ID), `{"name":"First","script":""}`)
+	updateResp := putJSON(t, fmt.Sprintf("%s/api/proxy-groups/%d", ts.URL, first.Group.ID), `{"name":"First","script":""}`)
 	defer updateResp.Body.Close()
 	require.Equal(t, http.StatusOK, updateResp.StatusCode)
 
-	getResp, err := http.Get(fmt.Sprintf("%s/proxy-groups/%d", ts.URL, second.Group.ID))
+	getResp, err := http.Get(fmt.Sprintf("%s/api/proxy-groups/%d", ts.URL, second.Group.ID))
 	require.NoError(t, err)
 	defer getResp.Body.Close()
 	assert.Contains(t, readBody(t, getResp), "return node.id")
@@ -283,7 +289,7 @@ func TestRemovingScriptKeepsGroupValid(t *testing.T) {
 	ts := newTestServerWithGroups(t)
 	defer ts.Close()
 
-	createResp := postJSON(t, ts.URL+"/proxy-groups", `{"name":"Optional","script":"function (proxyNodes) { return [] }"}`)
+	createResp := postJSON(t, ts.URL+"/api/proxy-groups", `{"name":"Optional","script":"function (proxyNodes) { return [] }"}`)
 	defer createResp.Body.Close()
 
 	var created struct {
@@ -293,11 +299,11 @@ func TestRemovingScriptKeepsGroupValid(t *testing.T) {
 	}
 	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
 
-	updateResp := putJSON(t, fmt.Sprintf("%s/proxy-groups/%d", ts.URL, created.Group.ID), `{"name":"Optional","script":""}`)
+	updateResp := putJSON(t, fmt.Sprintf("%s/api/proxy-groups/%d", ts.URL, created.Group.ID), `{"name":"Optional","script":""}`)
 	defer updateResp.Body.Close()
 	require.Equal(t, http.StatusOK, updateResp.StatusCode)
 
-	getResp, err := http.Get(fmt.Sprintf("%s/proxy-groups/%d", ts.URL, created.Group.ID))
+	getResp, err := http.Get(fmt.Sprintf("%s/api/proxy-groups/%d", ts.URL, created.Group.ID))
 	require.NoError(t, err)
 	defer getResp.Body.Close()
 	assert.Equal(t, http.StatusOK, getResp.StatusCode)

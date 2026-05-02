@@ -46,7 +46,7 @@ const ProviderManager: React.FC = () => {
     if (providerNodes[providerId]) return;
     setNodesLoading(prev => ({ ...prev, [providerId]: true }));
     try {
-      const response = await fetch(`/providers/${providerId}/nodes`);
+      const response = await fetch(`/api/providers/${providerId}/nodes`);
       if (response.ok) {
         const data = await response.json();
         setProviderNodes(prev => ({ ...prev, [providerId]: data.nodes || [] }));
@@ -69,7 +69,7 @@ const ProviderManager: React.FC = () => {
   const fetchProviders = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/providers');
+      const response = await fetch('/api/providers');
       const data = await response.json();
       setProviders(data.providers || []);
     } catch (error) {
@@ -97,7 +97,7 @@ const ProviderManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      await fetch(`/providers/${id}`, { method: 'DELETE' });
+      await fetch(`/api/providers/${id}`, { method: 'DELETE' });
       message.success('Provider deleted');
       fetchProviders();
     } catch (error) {
@@ -107,7 +107,7 @@ const ProviderManager: React.FC = () => {
 
   const handleRefresh = async (id: number) => {
     try {
-      const response = await fetch(`/providers/${id}/refresh`, { method: 'POST' });
+      const response = await fetch(`/api/providers/${id}/refresh`, { method: 'POST' });
       if (response.ok) {
         message.success('Refresh triggered successfully');
         setProviderNodes(prev => {
@@ -129,7 +129,7 @@ const ProviderManager: React.FC = () => {
     setSnapshotLoading(true);
     setSnapshotDrawerVisible(true);
     try {
-      const response = await fetch(`/providers/${id}/snapshot`);
+      const response = await fetch(`/api/providers/${id}/snapshot`);
       if (response.ok) {
         const data = await response.json();
         setCurrentSnapshot(data.snapshot);
@@ -151,7 +151,7 @@ const ProviderManager: React.FC = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
-      const url = editingProvider ? `/providers/${editingProvider.id}` : '/providers';
+      const url = editingProvider ? `/api/providers/${editingProvider.id}` : '/api/providers';
       const method = editingProvider ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
