@@ -62,20 +62,9 @@ func (h *Handler) handleRuleByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) listRules(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[API] GET /rules")
 
-	page := 1
-	pageSize := 20
-	if v := r.URL.Query().Get("page"); v != "" {
-		if p, err := strconv.Atoi(v); err == nil && p > 0 {
-			page = p
-		}
-	}
-	if v := r.URL.Query().Get("page_size"); v != "" {
-		if ps, err := strconv.Atoi(v); err == nil && ps > 0 {
-			pageSize = ps
-		}
-	}
+	in := parseListRulesInput(r)
 
-	result, err := h.service.List(r.Context(), page, pageSize)
+	result, err := h.service.List(r.Context(), in)
 	if err != nil {
 		log.Printf("[API] List rules failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -84,6 +73,12 @@ func (h *Handler) listRules(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+func parseListRulesInput(r *http.Request) ListRulesInput {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	return ListRulesInput{Page: page, PageSize: pageSize}
 }
 
 func (h *Handler) createRule(w http.ResponseWriter, r *http.Request) {

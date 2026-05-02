@@ -87,8 +87,9 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
-func (s *Service) List(ctx context.Context, page, pageSize int) (*ListRulesResult, error) {
-	rules, total, err := s.repo.List(ctx, page, pageSize)
+func (s *Service) List(ctx context.Context, in ListRulesInput) (*ListRulesResult, error) {
+	in = normalizeListInput(in)
+	rules, total, err := s.repo.List(ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -97,8 +98,8 @@ func (s *Service) List(ctx context.Context, page, pageSize int) (*ListRulesResul
 	}
 	return &ListRulesResult{
 		Rules:    rules,
-		Page:     page,
-		PageSize: pageSize,
+		Page:     in.Page,
+		PageSize: in.PageSize,
 		Total:    total,
 	}, nil
 }

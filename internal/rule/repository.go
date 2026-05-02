@@ -9,6 +9,24 @@ import (
 
 var ErrNotFound = errors.New("rule not found")
 
+type ListRulesInput struct {
+	Page     int
+	PageSize int
+}
+
+func normalizeListInput(in ListRulesInput) ListRulesInput {
+	if in.Page < 1 {
+		in.Page = 1
+	}
+	if in.PageSize < 1 {
+		in.PageSize = 20
+	}
+	if in.PageSize > 100 {
+		in.PageSize = 100
+	}
+	return in
+}
+
 type CreateRuleRecord struct {
 	RuleType    string
 	Pattern     string
@@ -81,20 +99,21 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (Rule, error) {
 	return rl, nil
 }
 
-func (r *Repository) List(ctx context.Context, page, pageSize int) ([]Rule, int, error) {
+func (r *Repository) List(ctx context.Context, in ListRulesInput) ([]Rule, int, error) {
+	in = normalizeListInput(in)
 	var total int
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rules`).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
+	offset := (in.Page - 1) * in.PageSize
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT r.id, r.rule_type, r.pattern, r.target_kind, r.proxy_group_id, pg.name, r.created_at, r.updated_at
 		 FROM rules r
 		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
-		 ORDER BY r.id LIMIT ? OFFSET ?`,
-		pageSize, offset,
+		 ORDER BY r.id DESC LIMIT ? OFFSET ?`,
+		in.PageSize, offset,
 	)
 	if err != nil {
 		return nil, 0, err

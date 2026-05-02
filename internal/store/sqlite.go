@@ -36,6 +36,11 @@ func MustOpen(dbPath string) *sql.DB {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
+	if _, err := db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		db.Close()
+		log.Fatalf("enable foreign keys: %v", err)
+	}
+
 	if err := migrate(db); err != nil {
 		db.Close()
 		log.Fatalf("migrate database: %v", err)

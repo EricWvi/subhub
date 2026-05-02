@@ -285,6 +285,23 @@ func TestUpdatingOneGroupScriptDoesNotChangeOtherGroups(t *testing.T) {
 	assert.Contains(t, readBody(t, getResp), "return node.id")
 }
 
+func TestDeleteProxyGroupDeletesRelatedRules(t *testing.T) {
+	ts := newTestServerWithRules(t)
+	defer ts.Close()
+
+	groupID := createProxyGroup(t, ts.URL, `{"name":"Streaming","script":""}`)
+	postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"netflix.com","proxy_group":"Streaming"}`).Body.Close()
+
+	deleteResp := deleteRequest(t, fmt.Sprintf("%s/api/proxy-groups/%d", ts.URL, groupID))
+	defer deleteResp.Body.Close()
+	require.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
+
+	listResp, err := http.Get(ts.URL + "/api/rules")
+	require.NoError(t, err)
+	defer listResp.Body.Close()
+	assert.JSONEq(t, `{"rules":[],"page":1,"page_size":20,"total":0}`, readBody(t, listResp))
+}
+
 func TestRemovingScriptKeepsGroupValid(t *testing.T) {
 	ts := newTestServerWithGroups(t)
 	defer ts.Close()

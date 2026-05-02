@@ -118,6 +118,38 @@ func TestCreateGetUpdateDeleteRule(t *testing.T) {
 	_ = groupID
 }
 
+func TestListRulesUsesDescendingPagination(t *testing.T) {
+	ts := newTestServerWithRules(t)
+	defer ts.Close()
+
+	groupID := createProxyGroup(t, ts.URL, `{"name":"OpenAI","script":""}`)
+	_ = groupID
+
+	postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"one.com","proxy_group":"DIRECT"}`).Body.Close()
+	postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"two.com","proxy_group":"DIRECT"}`).Body.Close()
+	postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"three.com","proxy_group":"DIRECT"}`).Body.Close()
+
+	resp, err := http.Get(ts.URL + "/api/rules?page=1&page_size=2")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var result struct {
+		Rules []struct {
+			Pattern string `json:"pattern"`
+		} `json:"rules"`
+		Page     int `json:"page"`
+		PageSize int `json:"page_size"`
+		Total    int `json:"total"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	require.Len(t, result.Rules, 2)
+	assert.Equal(t, "three.com", result.Rules[0].Pattern)
+	assert.Equal(t, "two.com", result.Rules[1].Pattern)
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 2, result.PageSize)
+	assert.Equal(t, 3, result.Total)
+}
+
 func TestCreateRuleRejectsUnknownProxyGroup(t *testing.T) {
 	ts := newTestServerWithRules(t)
 	defer ts.Close()
