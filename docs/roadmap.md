@@ -30,10 +30,18 @@ _Focus: Pattern matching and group automation._
 
 ### Phase 3.5: Rule Aggregator
 
-- [ ] **Rule Injector:** Implement the logic to merge manual rule lists into the final configuration.
-- [ ] **Rule Editor:** Add frontend controls for creating and managing manual rules.
+- [x] **Rule Injector:** Implement the logic to merge manual rule lists into the final configuration.
+- [x] **Rule Editor:** Add frontend controls for creating and managing manual rules.
 
-### Phase 4: Performance & Analytics (The Backend)
+### Phase 4: Subscription Services
+
+_Focus: Provide subscription endpoints for multiple Mihomo-compatible outputs._
+
+- [ ] **Clash Config Subscription:** Serve a full Clash/Mihomo configuration subscription for direct client use.
+- [ ] **Proxy Provider Subscription:** Expose a proxy provider subscription that publishes node lists in Mihomo-native format.
+- [ ] **Rule Provider Subscription:** Expose a rule provider subscription that publishes reusable rule sets for downstream configs.
+
+### Phase 5: Performance & Analytics (The Backend)
 
 _Focus: Background health monitoring and node scoring._
 
@@ -43,7 +51,7 @@ _Focus: Background health monitoring and node scoring._
 - [ ] **Validation Layer:** Add a YAML linter to ensure every generated config is valid for Mihomo/Clash Meta before serving.
 - [ ] **Validation Feedback:** Surface YAML linting results directly in the UI.
 
-### Phase 4.5: Performance UI (The Interface)
+### Phase 5.5: Performance UI (The Interface)
 
 _Focus: Bring health data and scoring into the frontend early._
 
@@ -51,7 +59,7 @@ _Focus: Bring health data and scoring into the frontend early._
 - [ ] **Score Viewer:** Expose the scoring model and ranked nodes before the full automation layer ships.
 - [ ] **Selection Controls:** Let users preview or override which nodes are treated as "dead" or "high-score".
 
-### Phase 5: UI Consolidation (The Interface)
+### Phase 6: UI Consolidation (The Interface)
 
 _Focus: Compose the earlier frontend modules into one coherent dashboard shell._
 
@@ -61,14 +69,14 @@ _Focus: Compose the earlier frontend modules into one coherent dashboard shell._
 
 ---
 
-### Phase 6: Release Hardening & Deployment
+### Phase 7: Release Hardening & Deployment
 
 _Focus: Secure the product and package it for rollout._
 
 - [ ] **Auth Layer:** Secure the Web UI and subscription endpoints (API Keys/JWT).
 - [ ] **Deployment Packaging:** Containerize the backend, frontend, and database for easy "One-Click" deployment.
 
-### Phase 7: Ingress & Egress Analysis
+### Phase 8: Ingress & Egress Analysis
 
 _Focus: Deep network path visibility and data sovereignty._
 
@@ -78,7 +86,7 @@ _Focus: Deep network path visibility and data sovereignty._
 
 ---
 
-### Phase 8: Edge Logic & Advanced Automation (Optional)
+### Phase 9: Edge Logic & Advanced Automation (Optional)
 
 - [ ] **Scripting Support:** Support for custom TypeScript/JavaScript snippets to transform node properties on-the-fly.
 - [ ] **Webhooks:** Trigger external notifications (Telegram/Discord) when a primary provider goes down or node availability drops below a specific threshold.
