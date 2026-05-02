@@ -18,20 +18,20 @@ type Provider struct {
 }
 
 type ProxyNode struct {
-	ID         int64
-	ProviderID int64
-	Name       string
-	RawYAML    string
-	UpdateMark int64
+	ID         int64  `json:"id"`
+	ProviderID int64  `json:"provider_id"`
+	Name       string `json:"name"`
+	RawYAML    string `json:"raw_yaml"`
+	UpdateMark int64  `json:"update_mark"`
 }
 
 type Snapshot struct {
-	ID              int64     `json:"id"`
-	ProviderID      int64     `json:"provider_id"`
-	Format          string    `json:"format"`
-	NormalizedYAML  string    `json:"normalized_yaml"`
-	NodeCount       int       `json:"node_count"`
-	FetchedAt       time.Time `json:"fetched_at"`
+	ID             int64     `json:"id"`
+	ProviderID     int64     `json:"provider_id"`
+	Format         string    `json:"format"`
+	NormalizedYAML string    `json:"normalized_yaml"`
+	NodeCount      int       `json:"node_count"`
+	FetchedAt      time.Time `json:"fetched_at"`
 }
 
 type RefreshAttempt struct {

@@ -44,6 +44,7 @@ config.Load → store.MustOpen (SQLite) → provider.Repository → provider.Ser
 - **Provider handler routing:** `provider/http.go` manually parses `/providers/{id}` and `/providers/{id}/refresh` from URL path via `strings.TrimPrefix` + `strings.Split` (no router library).
 - **Refresh injection:** `provider.Handler.SetRefresher(RefreshProviderFunc)` avoids circular deps between `provider` and `refresh` packages.
 - **Test proxy maps** are `[]map[string]any`, not structs — this is the Mihomo-native format throughout.
+- All struct definitions must include `json` tags.
 - use `Asia/Shanghai` as Timezone
 
 ## Testing

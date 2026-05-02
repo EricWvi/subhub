@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Popconfirm, Tag, Drawer, Typography } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Popconfirm, Tag, Drawer, Typography, Progress } from 'antd';
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
-import { formatDate24h } from '../utils';
+import { formatDate24h, formatBytes } from '../utils';
 
 const { Title, Text } = Typography;
 
@@ -10,10 +10,21 @@ interface Provider {
   name: string;
   url: string;
   refresh_interval_minutes: number;
+  abbrev: string;
+  used: number;
+  total: number;
+  expire: number;
   created_at: string;
   updated_at: string;
   last_refresh_status?: string;
   last_refresh_message?: string;
+}
+
+interface ProxyNode {
+  id: number;
+  provider_id: number;
+  name: string;
+  raw_yaml: string;
 }
 
 interface Snapshot {
@@ -28,6 +39,25 @@ interface Snapshot {
 const ProviderManager: React.FC = () => {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(false);
+  const [providerNodes, setProviderNodes] = useState<Record<number, ProxyNode[]>>({});
+  const [nodesLoading, setNodesLoading] = useState<Record<number, boolean>>({});
+
+  const fetchNodes = async (providerId: number) => {
+    if (providerNodes[providerId]) return;
+    setNodesLoading(prev => ({ ...prev, [providerId]: true }));
+    try {
+      const response = await fetch(`/providers/${providerId}/nodes`);
+      if (response.ok) {
+        const data = await response.json();
+        setProviderNodes(prev => ({ ...prev, [providerId]: data.nodes || [] }));
+      }
+    } catch (error) {
+      message.error('Failed to fetch nodes');
+    } finally {
+      setNodesLoading(prev => ({ ...prev, [providerId]: false }));
+    }
+  };
+
   const [modalVisible, setModalVisible] = useState(false);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
   const [form] = Form.useForm();
@@ -80,6 +110,11 @@ const ProviderManager: React.FC = () => {
       const response = await fetch(`/providers/${id}/refresh`, { method: 'POST' });
       if (response.ok) {
         message.success('Refresh triggered successfully');
+        setProviderNodes(prev => {
+          const newState = { ...prev };
+          delete newState[id];
+          return newState;
+        });
         fetchProviders();
       } else {
         const errorText = await response.text();
@@ -141,8 +176,34 @@ const ProviderManager: React.FC = () => {
   const columns = [
     {
       title: 'Name',
-      dataIndex: 'name',
       key: 'name',
+      render: (_: any, record: Provider) => (
+        <Space>
+          {record.name}
+          {record.abbrev && <Tag color="blue">{record.abbrev}</Tag>}
+        </Space>
+      ),
+    },
+    {
+      title: 'Usage',
+      key: 'usage',
+      width: 200,
+      render: (_: any, record: Provider) => {
+        if (!record.total || record.total === 0) return <Text type="secondary">N/A</Text>;
+        const percent = Math.min(100, Math.round((record.used / record.total) * 100));
+        const expiryDate = record.expire > 0 ? formatDate24h(new Date(record.expire * 1000).toISOString()) : 'Never';
+        return (
+          <div style={{ width: '100%' }}>
+            <Progress percent={percent} size="small" status={percent > 90 ? 'exception' : 'active'} />
+            <div style={{ fontSize: '11px', display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+              <span>{formatBytes(record.used)} / {formatBytes(record.total)}</span>
+            </div>
+            <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
+              Exp: {expiryDate}
+            </div>
+          </div>
+        );
+      }
     },
     {
       title: 'URL',
@@ -217,6 +278,37 @@ const ProviderManager: React.FC = () => {
         dataSource={providers} 
         rowKey="id" 
         loading={loading} 
+        expandable={{
+          expandedRowRender: (record) => (
+            <div style={{ padding: '8px 40px' }}>
+              <Title level={5}>Proxy Nodes ({providerNodes[record.id]?.length || 0})</Title>
+              <Table
+                size="small"
+                columns={[
+                  { title: 'Node Name', dataIndex: 'name', key: 'name' },
+                  { 
+                    title: 'Configuration', 
+                    key: 'raw', 
+                    render: (_, node) => (
+                      <pre style={{ margin: 0, fontSize: '10px', maxHeight: '100px', overflow: 'auto' }}>
+                        {node.raw_yaml}
+                      </pre>
+                    ) 
+                  },
+                ]}
+                dataSource={providerNodes[record.id] || []}
+                rowKey="id"
+                pagination={false}
+                loading={nodesLoading[record.id]}
+              />
+            </div>
+          ),
+          onExpand: (expanded, record) => {
+            if (expanded) {
+              fetchNodes(record.id);
+            }
+          }
+        }}
       />
 
       <Modal
@@ -233,6 +325,14 @@ const ProviderManager: React.FC = () => {
             rules={[{ required: true, message: 'Please input provider name!' }]}
           >
             <Input placeholder="My Airport" />
+          </Form.Item>
+          <Form.Item
+            name="abbrev"
+            label="Abbreviation"
+            tooltip="Uppercase letters only (e.g. 'XYZ')"
+            getValueFromEvent={(e) => e.target.value.toUpperCase().replace(/[^A-Z]/g, '')}
+          >
+            <Input placeholder="AIRPORT" />
           </Form.Item>
           <Form.Item
             name="url"

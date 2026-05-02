@@ -54,6 +54,7 @@ Expected behavior:
 - abbreviations do not need to be unique across providers
 - a provider can still be understood and managed even if another provider uses the same abbreviation
 - invalid abbreviation input is rejected clearly rather than silently changed into another value
+- abbreviations are displayed prominently on the providers page alongside the provider name
 - abbreviations are fields displayed with names, not replacing
 
 ### 2. Provider Subscription Usage Visibility
@@ -62,7 +63,7 @@ The providers page must display subscription usage and limit information derived
 
 Expected behavior:
 
-- provider entries can show relevant subscription usage details associated with the latest known provider state
+- provider entries show relevant subscription usage details (upload+download result, total limit, and expiration date) associated with the latest known provider state
 - usage information is presented as provider metadata, not as a separate advanced analytics system
 - if upstream usage metadata is unavailable, malformed, or absent, the providers page remains usable and communicates that the information is not available
 - usage information shown on the page reflects the latest known usable provider data rather than requiring a live fetch during page view
@@ -79,6 +80,8 @@ Expected behavior:
 - stored nodes remain associated with their source provider
 - the normalized yaml of each provider remains untouched
 - node persistence reflects the transformed node representation that SubHub intends to manage going forward
+- the providers page allows users to view the list of nodes associated with each provider
+- the node list is collapsed and hidden by default to maintain a clean interface
 - contributors can reason about node-level changes without parsing an entire provider payload as one opaque object
 - later workflows can use stored nodes as the basis for output generation and future matching logic
 
@@ -125,6 +128,19 @@ Notes:
 - this workflow does not require advanced deduplication across providers
 - this workflow does not require grouping, scoring, or rule assignment
 
+### Workflow 4: Inspect Proxy Nodes
+
+1. A user opens the providers page.
+2. The user identifies a provider they wish to inspect.
+3. The user expands the provider entry (e.g., via a "Show Nodes" toggle).
+4. The system displays the list of proxy nodes currently associated with that provider.
+5. The user collapses the entry to hide the nodes.
+
+Notes:
+
+- nodes are hidden by default to prevent visual clutter
+- the displayed node set reflects the result of the latest successful refresh
+
 ## Functional Requirements
 
 Phase 2 should satisfy the following requirements:
@@ -133,11 +149,13 @@ Phase 2 should satisfy the following requirements:
 2. Abbreviations accept uppercase letters only.
 3. Two or more providers may share the same abbreviation without causing either provider to become invalid.
 4. Invalid abbreviation input is rejected clearly.
-5. The providers page displays `Subscription-Userinfo` related information when the latest known provider data includes it.
+5. The providers page displays `Subscription-Userinfo` related information (usage and expiration) when the latest known provider data includes it.
 6. The absence of `Subscription-Userinfo` data does not block provider display or management.
 7. Each transformed proxy node is stored separately as an individual managed record.
 8. Individually stored nodes remain linked to their source provider.
 9. Node-level persistence becomes the product basis for later transformation and output workflows in this phase and beyond.
+10. The providers page allows users to view the list of proxy nodes for each provider.
+11. Proxy node lists are collapsed and hidden by default.
 
 ## Out of Scope
 
@@ -171,8 +189,10 @@ Phase 2 can be considered complete when all of the following are true:
 - abbreviation input accepts uppercase letters only
 - two different providers can be saved successfully with the same abbreviation
 - invalid abbreviation input is rejected with clear feedback
-- the providers page shows `Subscription-Userinfo` related data for providers whose latest known state includes it
+- the providers page shows `Subscription-Userinfo` related data (usage, total, expiration) for providers whose latest known state includes it
 - providers that do not expose usable `Subscription-Userinfo` data still display correctly on the page
+- the providers page includes a toggle or expansion mechanism to show/hide proxy nodes for each provider
+- proxy nodes are not visible until the user explicitly chooses to see them
 - after a provider refresh, the resulting proxy nodes are persisted as separate records rather than only as one bulk transformed payload
 - each stored node can be traced back to its source provider
 - later contributor work can treat individually stored nodes as the basis for downstream transformation and output behavior
@@ -184,5 +204,6 @@ Phase 2 is done when SubHub can support provider-level management and visibility
 - providers can carry user-defined abbreviations
 - subscription usage metadata can be reviewed from the providers page
 - transformed nodes are persisted individually and associated with their provider
+- individual proxy nodes can be inspected on the providers page via an expandable section (hidden by default)
 
 If those three things work reliably and within scope, future contributors can move on to Phase 3 without needing to redesign the provider-facing model introduced in Phase 2.

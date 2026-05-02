@@ -124,3 +124,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 func (s *Service) GetLatestSnapshot(ctx context.Context, id int64) (Snapshot, error) {
 	return s.repo.GetLatestSnapshot(ctx, id)
 }
+
+func (s *Service) ListNodes(ctx context.Context, providerID int64) ([]ProxyNode, error) {
+	return s.repo.ListProxyNodesByProvider(ctx, providerID)
+}

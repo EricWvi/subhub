@@ -63,6 +63,11 @@ func (h *Handler) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 				h.getSnapshot(w, r, id)
 				return
 			}
+		case "nodes":
+			if r.Method == http.MethodGet {
+				h.getNodes(w, r, id)
+				return
+			}
 		}
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -235,4 +240,19 @@ func (h *Handler) getSnapshot(w http.ResponseWriter, r *http.Request, id int64) 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"snapshot": s})
+}
+
+func (h *Handler) getNodes(w http.ResponseWriter, r *http.Request, id int64) {
+	log.Printf("[API] GET /providers/%d/nodes", id)
+	nodes, err := h.service.ListNodes(r.Context(), id)
+	if err != nil {
+		log.Printf("[API] List nodes for provider %d failed: %v", id, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if nodes == nil {
+		nodes = []ProxyNode{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"nodes": nodes})
 }
