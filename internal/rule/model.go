@@ -11,6 +11,18 @@ type Rule struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+type CreateRuleInput struct {
+	RuleType   string `json:"rule_type"`
+	Pattern    string `json:"pattern"`
+	ProxyGroup string `json:"proxy_group"`
+}
+
+type UpdateRuleInput struct {
+	RuleType   string `json:"rule_type"`
+	Pattern    string `json:"pattern"`
+	ProxyGroup string `json:"proxy_group"`
+}
+
 type ListRulesResult struct {
 	Rules    []Rule `json:"rules"`
 	Page     int    `json:"page"`

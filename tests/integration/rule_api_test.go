@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -50,6 +52,20 @@ func newTestServerWithRules(t *testing.T) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
+func createProxyGroup(t *testing.T, baseURL, body string) int64 {
+	t.Helper()
+	resp := postJSON(t, baseURL+"/api/proxy-groups", body)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var result struct {
+		Group struct {
+			ID int64 `json:"id"`
+		} `json:"group"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	return result.Group.ID
+}
+
 func TestListRulesStartsEmpty(t *testing.T) {
 	ts := newTestServerWithRules(t)
 	defer ts.Close()
@@ -60,4 +76,55 @@ func TestListRulesStartsEmpty(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.JSONEq(t, `{"rules":[],"page":1,"page_size":20,"total":0}`, readBody(t, resp))
+}
+
+func TestCreateGetUpdateDeleteRule(t *testing.T) {
+	ts := newTestServerWithRules(t)
+	defer ts.Close()
+
+	groupID := createProxyGroup(t, ts.URL, `{"name":"Streaming","script":""}`)
+
+	createResp := postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"netflix.com","proxy_group":"Streaming"}`)
+	defer createResp.Body.Close()
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
+
+	var created struct {
+		Rule struct {
+			ID         int64  `json:"id"`
+			RuleType   string `json:"rule_type"`
+			Pattern    string `json:"pattern"`
+			ProxyGroup string `json:"proxy_group"`
+		} `json:"rule"`
+	}
+	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
+	assert.Equal(t, "DOMAIN-SUFFIX", created.Rule.RuleType)
+	assert.Equal(t, "netflix.com", created.Rule.Pattern)
+	assert.Equal(t, "Streaming", created.Rule.ProxyGroup)
+
+	getResp, err := http.Get(fmt.Sprintf("%s/api/rules/%d", ts.URL, created.Rule.ID))
+	require.NoError(t, err)
+	defer getResp.Body.Close()
+	assert.Equal(t, http.StatusOK, getResp.StatusCode)
+
+	updateResp := putJSON(t, fmt.Sprintf("%s/api/rules/%d", ts.URL, created.Rule.ID), `{"rule_type":"DOMAIN-KEYWORD","pattern":"openai","proxy_group":"DIRECT"}`)
+	defer updateResp.Body.Close()
+	assert.Equal(t, http.StatusOK, updateResp.StatusCode)
+	assert.Contains(t, readBody(t, updateResp), `"proxy_group":"DIRECT"`)
+
+	deleteResp := deleteRequest(t, fmt.Sprintf("%s/api/rules/%d", ts.URL, created.Rule.ID))
+	defer deleteResp.Body.Close()
+	assert.Equal(t, http.StatusNoContent, deleteResp.StatusCode)
+
+	_ = groupID
+}
+
+func TestCreateRuleRejectsUnknownProxyGroup(t *testing.T) {
+	ts := newTestServerWithRules(t)
+	defer ts.Close()
+
+	resp := postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"google.com","proxy_group":"Missing"}`)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, readBody(t, resp), "invalid proxy group")
 }

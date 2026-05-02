@@ -3,8 +3,18 @@ package rule
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
+
+var ErrNotFound = errors.New("rule not found")
+
+type CreateRuleRecord struct {
+	RuleType    string
+	Pattern     string
+	TargetKind  string
+	ProxyGroupID sql.NullInt64
+}
 
 type Repository struct {
 	db *sql.DB
@@ -19,6 +29,58 @@ func nowInLocation() time.Time {
 	return time.Now().In(loc)
 }
 
+func (r *Repository) FindProxyGroupIDByName(ctx context.Context, name string) (int64, error) {
+	var id int64
+	err := r.db.QueryRowContext(ctx, `SELECT id FROM proxy_groups WHERE name = ?`, name).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (r *Repository) Create(ctx context.Context, rec CreateRuleRecord) (Rule, error) {
+	now := nowInLocation()
+	result, err := r.db.ExecContext(ctx,
+		`INSERT INTO rules (rule_type, pattern, target_kind, proxy_group_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		rec.RuleType, rec.Pattern, rec.TargetKind, rec.ProxyGroupID, now.Format(time.RFC3339), now.Format(time.RFC3339),
+	)
+	if err != nil {
+		return Rule{}, err
+	}
+	id, _ := result.LastInsertId()
+	return r.GetByID(ctx, id)
+}
+
+func (r *Repository) GetByID(ctx context.Context, id int64) (Rule, error) {
+	var rl Rule
+	var targetKind string
+	var proxyGroupID sql.NullInt64
+	var groupName sql.NullString
+	var createdAt, updatedAt string
+
+	err := r.db.QueryRowContext(ctx,
+		`SELECT r.id, r.rule_type, r.pattern, r.target_kind, r.proxy_group_id, pg.name, r.created_at, r.updated_at
+		 FROM rules r
+		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
+		 WHERE r.id = ?`,
+		id,
+	).Scan(&rl.ID, &rl.RuleType, &rl.Pattern, &targetKind, &proxyGroupID, &groupName, &createdAt, &updatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Rule{}, ErrNotFound
+		}
+		return Rule{}, err
+	}
+	if targetKind == "PROXY_GROUP" {
+		rl.ProxyGroup = groupName.String
+	} else {
+		rl.ProxyGroup = targetKind
+	}
+	rl.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	rl.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	return rl, nil
+}
+
 func (r *Repository) List(ctx context.Context, page, pageSize int) ([]Rule, int, error) {
 	var total int
 	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rules`).Scan(&total)
@@ -28,7 +90,10 @@ func (r *Repository) List(ctx context.Context, page, pageSize int) ([]Rule, int,
 
 	offset := (page - 1) * pageSize
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, rule_type, pattern, target_kind, proxy_group_id, created_at, updated_at FROM rules ORDER BY id LIMIT ? OFFSET ?`,
+		`SELECT r.id, r.rule_type, r.pattern, r.target_kind, r.proxy_group_id, pg.name, r.created_at, r.updated_at
+		 FROM rules r
+		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
+		 ORDER BY r.id LIMIT ? OFFSET ?`,
 		pageSize, offset,
 	)
 	if err != nil {
@@ -41,13 +106,43 @@ func (r *Repository) List(ctx context.Context, page, pageSize int) ([]Rule, int,
 		var rl Rule
 		var targetKind string
 		var proxyGroupID sql.NullInt64
+		var groupName sql.NullString
 		var createdAt, updatedAt string
-		if err := rows.Scan(&rl.ID, &rl.RuleType, &rl.Pattern, &targetKind, &proxyGroupID, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&rl.ID, &rl.RuleType, &rl.Pattern, &targetKind, &proxyGroupID, &groupName, &createdAt, &updatedAt); err != nil {
 			return nil, 0, err
+		}
+		if targetKind == "PROXY_GROUP" {
+			rl.ProxyGroup = groupName.String
+		} else {
+			rl.ProxyGroup = targetKind
 		}
 		rl.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		rl.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 		rules = append(rules, rl)
 	}
 	return rules, total, rows.Err()
+}
+
+func (r *Repository) Update(ctx context.Context, id int64, rec CreateRuleRecord) (Rule, error) {
+	now := nowInLocation()
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE rules SET rule_type = ?, pattern = ?, target_kind = ?, proxy_group_id = ?, updated_at = ? WHERE id = ?`,
+		rec.RuleType, rec.Pattern, rec.TargetKind, rec.ProxyGroupID, now.Format(time.RFC3339), id,
+	)
+	if err != nil {
+		return Rule{}, err
+	}
+	return r.GetByID(ctx, id)
+}
+
+func (r *Repository) Delete(ctx context.Context, id int64) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM rules WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
