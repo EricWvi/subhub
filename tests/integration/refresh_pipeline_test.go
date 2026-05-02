@@ -291,6 +291,33 @@ func TestRefreshReplacesProviderNodesUsingUpdateMarkSweep(t *testing.T) {
 	assert.Contains(t, nodes[1].RawYAML, "sg.example.com")
 }
 
+func TestMihomoOutputUsesCanonicalProxyNodes(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
+	require.NoError(t, err)
+
+	upstream := newFlakyUpstream(t, fixture)
+	ts, repo := newTestServerWithRefresh(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"delta","url":"%s"}`, upstream.server.URL))
+
+	refreshResp := refreshProvider(t, ts.URL, providerID)
+	defer refreshResp.Body.Close()
+	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
+
+	nodes, err := repo.ListProxyNodesByProvider(context.Background(), providerID)
+	require.NoError(t, err)
+	require.NotEmpty(t, nodes)
+
+	mihomoResp, err := http.Get(ts.URL + "/subscriptions/mihomo")
+	require.NoError(t, err)
+	defer mihomoResp.Body.Close()
+
+	body := readBody(t, mihomoResp)
+	assert.Contains(t, body, "name: vmess-hk-01")
+	assert.Contains(t, body, "name: ss-jp-01")
+}
+
 func TestMihomoOutputEmptyWhenNoSnapshots(t *testing.T) {
 	ts, _ := newTestServerWithRefresh(t)
 	defer ts.Close()

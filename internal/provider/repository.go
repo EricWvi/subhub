@@ -262,7 +262,7 @@ func (r *Repository) GetLatestSnapshot(ctx context.Context, providerID int64) (S
 
 func (r *Repository) ListLatestNodes(ctx context.Context) ([]map[string]any, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT normalized_yaml FROM provider_snapshots`,
+		`SELECT raw_yaml FROM proxy_nodes ORDER BY provider_id, id`,
 	)
 	if err != nil {
 		return nil, err
@@ -271,26 +271,15 @@ func (r *Repository) ListLatestNodes(ctx context.Context) ([]map[string]any, err
 
 	var all []map[string]any
 	for rows.Next() {
-		var normalized string
-		if err := rows.Scan(&normalized); err != nil {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
 			return nil, err
 		}
-		var doc map[string]any
-		if err := yaml.Unmarshal([]byte(normalized), &doc); err != nil {
+		var node map[string]any
+		if err := yaml.Unmarshal([]byte(raw), &node); err != nil {
 			return nil, err
 		}
-		proxies, ok := doc["proxies"].([]any)
-		if !ok {
-			continue
-		}
-		for _, p := range proxies {
-			if m, ok := p.(map[string]any); ok {
-				all = append(all, m)
-			}
-		}
+		all = append(all, node)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return all, nil
+	return all, rows.Err()
 }
