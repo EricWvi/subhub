@@ -17,12 +17,14 @@ type CreateProviderInput struct {
 	Name                   string `json:"name"`
 	URL                    string `json:"url"`
 	RefreshIntervalMinutes int64  `json:"refresh_interval_minutes"`
+	Abbrev                 string `json:"abbrev"`
 }
 
 type UpdateProviderInput struct {
 	Name                   string `json:"name"`
 	URL                    string `json:"url"`
 	RefreshIntervalMinutes int64  `json:"refresh_interval_minutes"`
+	Abbrev                 string `json:"abbrev"`
 }
 
 type Service struct {
@@ -48,6 +50,7 @@ func (s *Service) Create(ctx context.Context, in CreateProviderInput) (Provider,
 		Name:                   in.Name,
 		URL:                    in.URL,
 		RefreshIntervalMinutes: interval,
+		Abbrev:                 in.Abbrev,
 	})
 }
 
@@ -87,6 +90,7 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateProviderInput) 
 	p.Name = in.Name
 	p.URL = in.URL
 	p.RefreshIntervalMinutes = interval
+	p.Abbrev = in.Abbrev
 	return s.repo.Update(ctx, p)
 }
 

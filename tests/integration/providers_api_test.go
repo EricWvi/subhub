@@ -137,7 +137,31 @@ func TestCreateProviderUsesDefaultRefreshInterval(t *testing.T) {
 	p := result["provider"]
 	assert.Equal(t, "alpha", p["name"])
 	assert.Equal(t, "https://example.com/sub", p["url"])
-	assert.Equal(t, float64(7200), p["refresh_interval_seconds"])
+	assert.Equal(t, float64(120), p["refresh_interval_minutes"])
+}
+
+func TestCreateProviderReturnsPhase2MetadataFields(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	resp := postJSON(t, ts.URL+"/providers", `{"name":"alpha","url":"https://example.com/sub","abbrev":"HK"}`)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	var result struct {
+		Provider struct {
+			Abbrev string `json:"abbrev"`
+			Used   int64  `json:"used"`
+			Total  int64  `json:"total"`
+			Expire int64  `json:"expire"`
+		} `json:"provider"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.Equal(t, "HK", result.Provider.Abbrev)
+	assert.EqualValues(t, 0, result.Provider.Used)
+	assert.EqualValues(t, 0, result.Provider.Total)
+	assert.EqualValues(t, 0, result.Provider.Expire)
 }
 
 func TestUpdateAndDeleteProvider(t *testing.T) {
@@ -146,7 +170,7 @@ func TestUpdateAndDeleteProvider(t *testing.T) {
 
 	id := createProvider(t, ts.URL, `{"name":"alpha","url":"https://example.com/sub"}`)
 
-	putResp := putJSON(t, fmt.Sprintf("%s/providers/%d", ts.URL, id), `{"name":"beta","url":"https://example.net/sub","refresh_interval_seconds":3600}`)
+	putResp := putJSON(t, fmt.Sprintf("%s/providers/%d", ts.URL, id), `{"name":"beta","url":"https://example.net/sub","refresh_interval_minutes":60}`)
 	defer putResp.Body.Close()
 	assert.Equal(t, http.StatusOK, putResp.StatusCode)
 
@@ -154,7 +178,7 @@ func TestUpdateAndDeleteProvider(t *testing.T) {
 	err := json.Unmarshal([]byte(readBody(t, putResp)), &result)
 	require.NoError(t, err)
 	assert.Equal(t, "beta", result["provider"]["name"])
-	assert.Equal(t, float64(3600), result["provider"]["refresh_interval_seconds"])
+	assert.Equal(t, float64(60), result["provider"]["refresh_interval_minutes"])
 
 	delResp := deleteRequest(t, fmt.Sprintf("%s/providers/%d", ts.URL, id))
 	defer delResp.Body.Close()

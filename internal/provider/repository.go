@@ -25,8 +25,8 @@ func nowInLocation() time.Time {
 func (r *Repository) Create(ctx context.Context, p Provider) (Provider, error) {
 	now := nowInLocation()
 	result, err := r.db.ExecContext(ctx,
-		`INSERT INTO providers (name, url, refresh_interval_minutes, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
-		p.Name, p.URL, p.RefreshIntervalMinutes, now.Format(time.RFC3339), now.Format(time.RFC3339),
+		`INSERT INTO providers (name, url, refresh_interval_minutes, abbrev, used, total, expire, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.Name, p.URL, p.RefreshIntervalMinutes, p.Abbrev, p.Used, p.Total, p.Expire, now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	if err != nil {
 		return Provider{}, err
@@ -41,7 +41,7 @@ func (r *Repository) Create(ctx context.Context, p Provider) (Provider, error) {
 func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT 
-			p.id, p.name, p.url, p.refresh_interval_minutes, p.created_at, p.updated_at,
+			p.id, p.name, p.url, p.refresh_interval_minutes, p.abbrev, p.used, p.total, p.expire, p.created_at, p.updated_at,
 			ra.status, ra.message
 		FROM providers p
 		LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
@@ -57,7 +57,7 @@ func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 		var p Provider
 		var createdAt, updatedAt string
 		var status, message sql.NullString
-		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &createdAt, &updatedAt, &status, &message); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
@@ -78,12 +78,12 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (Provider, error) {
 	var status, message sql.NullString
 	err := r.db.QueryRowContext(ctx,
 		`SELECT 
-			p.id, p.name, p.url, p.refresh_interval_minutes, p.created_at, p.updated_at,
+			p.id, p.name, p.url, p.refresh_interval_minutes, p.abbrev, p.used, p.total, p.expire, p.created_at, p.updated_at,
 			ra.status, ra.message
 		FROM providers p
 		LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
 		WHERE p.id = ?`, id,
-	).Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &createdAt, &updatedAt, &status, &message)
+	).Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Provider{}, ErrNotFound
@@ -100,8 +100,8 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (Provider, error) {
 func (r *Repository) Update(ctx context.Context, p Provider) (Provider, error) {
 	now := nowInLocation()
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE providers SET name = ?, url = ?, refresh_interval_minutes = ?, updated_at = ? WHERE id = ?`,
-		p.Name, p.URL, p.RefreshIntervalMinutes, now.Format(time.RFC3339), p.ID,
+		`UPDATE providers SET name = ?, url = ?, refresh_interval_minutes = ?, abbrev = ?, used = ?, total = ?, expire = ?, updated_at = ? WHERE id = ?`,
+		p.Name, p.URL, p.RefreshIntervalMinutes, p.Abbrev, p.Used, p.Total, p.Expire, now.Format(time.RFC3339), p.ID,
 	)
 	if err != nil {
 		return Provider{}, err

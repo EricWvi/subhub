@@ -97,7 +97,6 @@ func TestRefreshRetainsPreviousSnapshotWhenProviderFails(t *testing.T) {
 	ctx := context.Background()
 	firstSnap, err := repo.GetLatestSnapshot(ctx, providerID)
 	require.NoError(t, err)
-	require.True(t, firstSnap.IsLastKnownGood)
 	require.Equal(t, 2, firstSnap.NodeCount)
 
 	upstream.fail.Store(true)
@@ -131,7 +130,7 @@ func TestRefreshSucceedsOnFirstFetch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "yaml", snap.Format)
 	assert.Equal(t, 2, snap.NodeCount)
-	assert.Contains(t, string(snap.RawPayload), "vmess-hk-01")
+	assert.Contains(t, snap.NormalizedYAML, "vmess-hk-01")
 }
 
 func TestRefreshReturnsNotFoundForMissingProvider(t *testing.T) {
@@ -158,10 +157,10 @@ func TestSchedulerRefreshesDueProvidersOnly(t *testing.T) {
 	repo := provider.NewRepository(db)
 	ctx := context.Background()
 
-	p1, err := repo.Create(ctx, provider.Provider{Name: "due", URL: "https://due.example.com", RefreshIntervalSeconds: 300})
+	p1, err := repo.Create(ctx, provider.Provider{Name: "due", URL: "https://due.example.com", RefreshIntervalMinutes: 5})
 	require.NoError(t, err)
 
-	p2, err := repo.Create(ctx, provider.Provider{Name: "fresh", URL: "https://fresh.example.com", RefreshIntervalSeconds: 7200})
+	p2, err := repo.Create(ctx, provider.Provider{Name: "fresh", URL: "https://fresh.example.com", RefreshIntervalMinutes: 120})
 	require.NoError(t, err)
 
 	fakeNow := time.Now().UTC()

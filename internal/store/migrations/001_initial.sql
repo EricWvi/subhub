@@ -3,8 +3,22 @@ CREATE TABLE IF NOT EXISTS providers (
     name TEXT NOT NULL UNIQUE,
     url TEXT NOT NULL,
     refresh_interval_minutes INTEGER NOT NULL,
+    abbrev TEXT NOT NULL DEFAULT '',
+    used INTEGER NOT NULL DEFAULT 0,
+    total INTEGER NOT NULL DEFAULT 0,
+    expire INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS proxy_nodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    raw_yaml TEXT NOT NULL,
+    update_mark INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(provider_id, name),
+    FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS provider_snapshots (
