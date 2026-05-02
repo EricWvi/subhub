@@ -26,12 +26,12 @@ _Focus: Expose provider CRUD and refresh workflows in the frontend alongside pha
 
 _Focus: Pattern matching and group automation._
 
-- [ ] **User Scripts:** Develop the **Proxy Group Mapper**. Users define groups (e.g., _Netflix_, _OpenAI_); SubHub auto-populates them via user provided scripts.
+- [x] **User Scripts:** Develop the **Proxy Group Mapper**. Users define groups (e.g., _Netflix_, _OpenAI_); SubHub auto-populates them via user provided scripts.
 
 ### Phase 3.5: Rule Aggregator
 
-- [ ] **Rule Injector:** Implement the logic to merge custom rule-providers or manual rule lists into the final configuration.
-- [ ] **Rule Editor:** Add frontend controls for custom rule-providers and manual rule lists.
+- [ ] **Rule Injector:** Implement the logic to merge manual rule lists into the final configuration.
+- [ ] **Rule Editor:** Add frontend controls for creating and managing manual rules.
 
 ### Phase 4: Performance & Analytics (The Backend)
 
