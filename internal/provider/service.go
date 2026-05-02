@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/EricWvi/subhub/internal/config"
 )
@@ -12,6 +13,20 @@ import (
 var ErrRefreshIntervalTooShort = errors.New("refresh interval must be at least 5 minutes")
 var ErrNotFound = errors.New("provider not found")
 var ErrInvalidURL = errors.New("invalid provider url")
+var errInvalidAbbrev = errors.New("abbrev must contain uppercase letters only")
+
+func normalizeAbbrev(raw string) (string, error) {
+	upper := strings.ToUpper(strings.TrimSpace(raw))
+	if upper == "" {
+		return "", nil
+	}
+	for _, r := range upper {
+		if r < 'A' || r > 'Z' {
+			return "", errInvalidAbbrev
+		}
+	}
+	return upper, nil
+}
 
 type CreateProviderInput struct {
 	Name                   string `json:"name"`
@@ -39,6 +54,10 @@ func (s *Service) Create(ctx context.Context, in CreateProviderInput) (Provider,
 	if _, err := url.ParseRequestURI(in.URL); err != nil {
 		return Provider{}, fmt.Errorf("%w: %s", ErrInvalidURL, err.Error())
 	}
+	abbrev, err := normalizeAbbrev(in.Abbrev)
+	if err != nil {
+		return Provider{}, err
+	}
 	interval := in.RefreshIntervalMinutes
 	if interval == 0 {
 		interval = int64(config.DefaultRefreshInterval.Minutes())
@@ -50,7 +69,7 @@ func (s *Service) Create(ctx context.Context, in CreateProviderInput) (Provider,
 		Name:                   in.Name,
 		URL:                    in.URL,
 		RefreshIntervalMinutes: interval,
-		Abbrev:                 in.Abbrev,
+		Abbrev:                 abbrev,
 	})
 }
 
@@ -73,6 +92,10 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateProviderInput) 
 	if _, err := url.ParseRequestURI(in.URL); err != nil {
 		return Provider{}, fmt.Errorf("%w: %s", ErrInvalidURL, err.Error())
 	}
+	abbrev, err := normalizeAbbrev(in.Abbrev)
+	if err != nil {
+		return Provider{}, err
+	}
 	interval := in.RefreshIntervalMinutes
 	if interval == 0 {
 		interval = int64(config.DefaultRefreshInterval.Minutes())
@@ -90,7 +113,7 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateProviderInput) 
 	p.Name = in.Name
 	p.URL = in.URL
 	p.RefreshIntervalMinutes = interval
-	p.Abbrev = in.Abbrev
+	p.Abbrev = abbrev
 	return s.repo.Update(ctx, p)
 }
 

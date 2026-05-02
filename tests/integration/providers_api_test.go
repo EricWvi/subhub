@@ -164,6 +164,36 @@ func TestCreateProviderReturnsPhase2MetadataFields(t *testing.T) {
 	assert.EqualValues(t, 0, result.Provider.Expire)
 }
 
+func TestCreateProviderUppercasesAbbrevAndAllowsDuplicates(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	first := postJSON(t, ts.URL+"/providers", `{"name":"alpha","url":"https://example.com/a","abbrev":"hk"}`)
+	defer first.Body.Close()
+	require.Equal(t, http.StatusCreated, first.StatusCode)
+
+	second := postJSON(t, ts.URL+"/providers", `{"name":"beta","url":"https://example.com/b","abbrev":"HK"}`)
+	defer second.Body.Close()
+	require.Equal(t, http.StatusCreated, second.StatusCode)
+
+	listResp, err := http.Get(ts.URL + "/providers")
+	require.NoError(t, err)
+	defer listResp.Body.Close()
+	assert.Contains(t, readBody(t, listResp), `"abbrev":"HK"`)
+}
+
+func TestUpdateProviderRejectsNonLetterAbbrev(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	id := createProvider(t, ts.URL, `{"name":"alpha","url":"https://example.com/sub","abbrev":"HK"}`)
+	resp := putJSON(t, fmt.Sprintf("%s/providers/%d", ts.URL, id), `{"name":"alpha","url":"https://example.com/sub","abbrev":"H1"}`)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Contains(t, readBody(t, resp), "uppercase letters only")
+}
+
 func TestUpdateAndDeleteProvider(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()
