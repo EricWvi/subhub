@@ -8,6 +8,7 @@ import (
 
 	"github.com/EricWvi/subhub/internal/config"
 	"github.com/EricWvi/subhub/internal/fetch"
+	"github.com/EricWvi/subhub/internal/group"
 	"github.com/EricWvi/subhub/internal/output"
 	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/refresh"
@@ -32,6 +33,11 @@ func main() {
 
 	outputHandler := output.NewHandler(repo, "tests/fixtures/template.yaml")
 	outputHandler.RegisterRoutes(mux)
+
+	groupRepo := group.NewRepository(db)
+	groupSvc := group.NewService(groupRepo)
+	groupHandler := group.NewHandler(groupSvc)
+	groupHandler.RegisterRoutes(mux)
 
 	scheduler := refresh.NewScheduler(repo, refreshSvc.RefreshProvider, time.Minute)
 	go scheduler.Start(context.Background())

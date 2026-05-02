@@ -39,3 +39,11 @@ CREATE TABLE IF NOT EXISTS refresh_attempts (
     attempted_at TEXT NOT NULL,
     FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS proxy_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    script_text TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
