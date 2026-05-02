@@ -19,24 +19,19 @@ _Focus: Expose provider CRUD and refresh workflows in the frontend alongside pha
 
 ### Phase 2: Model Transformation
 
-- [ ] **Node Name Transformation & Storage:** Normalize each fetched node's name, then persist every transformed node individually as the basis for unified output.
-- [ ] **Unified Output:** Create a basic API endpoint that merges fetched nodes into a static Clash template.
+- [x] **Node Name Transformation & Storage:** Normalize each fetched node's name, then persist every transformed node individually as the basis for unified output.
+- [x] **Unified Output:** Create a basic API endpoint that merges fetched nodes into a static Clash template.
 
-### Phase 3: Intelligence & Logic (The Middleware)
+### Phase 3: Proxy Group
 
 _Focus: Pattern matching and group automation._
 
-- [ ] **Regex Engine:** Develop the **Proxy Group Mapper**. Users define groups (e.g., _Netflix_, _OpenAI_); SubHub auto-populates them via keyword/regex matching.
+- [ ] **User Scripts:** Develop the **Proxy Group Mapper**. Users define groups (e.g., _Netflix_, _OpenAI_); SubHub auto-populates them via user provided scripts.
+
+### Phase 3.5: Rule Aggregator
+
 - [ ] **Rule Injector:** Implement the logic to merge custom rule-providers or manual rule lists into the final configuration.
-- [ ] **Validation Layer:** Add a YAML linter to ensure every generated config is valid for Mihomo/Clash Meta before serving.
-
-### Phase 3.5: Rule & Group UI (The Interface)
-
-_Focus: Move group mapping and rule management into the frontend alongside phase 2._
-
-- [ ] **Proxy Group Mapper UI:** Provide a visual editor for keyword/regex-based group assignment.
 - [ ] **Rule Editor:** Add frontend controls for custom rule-providers and manual rule lists.
-- [ ] **Validation Feedback:** Surface YAML linting results directly in the UI.
 
 ### Phase 4: Performance & Analytics (The Backend)
 
@@ -45,6 +40,8 @@ _Focus: Background health monitoring and node scoring._
 - [ ] **Health Check Worker:** Build a background service around Mihomo's request/health-check capabilities so cached nodes are exercised using the same runtime behavior as the downstream client stack.
 - [ ] **Scoring Algorithm:** Develop a ranking system based on **latency + stability + success rate**, using Mihomo's own ability to make requests as the measurement source.
 - [ ] **Smart Selection:** Allow the YAML generator to filter out "dead" nodes or prioritize "High-Score" nodes for specific groups.
+- [ ] **Validation Layer:** Add a YAML linter to ensure every generated config is valid for Mihomo/Clash Meta before serving.
+- [ ] **Validation Feedback:** Surface YAML linting results directly in the UI.
 
 ### Phase 4.5: Performance UI (The Interface)
 
