@@ -1,0 +1,19 @@
+package rule
+
+import "time"
+
+type Rule struct {
+	ID         int64     `json:"id"`
+	RuleType   string    `json:"rule_type"`
+	Pattern    string    `json:"pattern"`
+	ProxyGroup string    `json:"proxy_group"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type ListRulesResult struct {
+	Rules    []Rule `json:"rules"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"page_size"`
+	Total    int    `json:"total"`
+}

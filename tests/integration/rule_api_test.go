@@ -1,33 +1,36 @@
-package main
+package integration
 
 import (
-	"context"
-	"log"
 	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
 	"time"
 
 	"github.com/EricWvi/subhub/internal/config"
-	"github.com/EricWvi/subhub/internal/fetch"
 	"github.com/EricWvi/subhub/internal/group"
-	"github.com/EricWvi/subhub/internal/output"
 	"github.com/EricWvi/subhub/internal/provider"
-	"github.com/EricWvi/subhub/internal/refresh"
 	"github.com/EricWvi/subhub/internal/rule"
 	"github.com/EricWvi/subhub/internal/store"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func main() {
-	cfg := config.Load()
+func newTestServerWithRules(t *testing.T) *httptest.Server {
+	t.Helper()
+	dir := t.TempDir()
+	cfg := config.Config{
+		ListenAddr:             ":0",
+		DatabasePath:           filepath.Join(dir, "test.db"),
+		UpstreamRequestTimeout: 5 * time.Second,
+		DefaultRefreshInterval: config.DefaultRefreshInterval,
+	}
 	db := store.MustOpen(cfg.DatabasePath)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	repo := provider.NewRepository(db)
 	svc := provider.NewService(repo)
 	handler := provider.NewHandler(svc)
-
-	fetcher := fetch.NewClient(cfg.UpstreamRequestTimeout)
-	refreshSvc := refresh.NewService(repo, fetcher)
-	handler.SetRefresher(refreshSvc.RefreshProvider)
 
 	groupRepo := group.NewRepository(db)
 	groupSvc := group.NewService(groupRepo)
@@ -37,20 +40,24 @@ func main() {
 	ruleSvc := rule.NewService(ruleRepo)
 	ruleHandler := rule.NewHandler(ruleSvc)
 
-	outputHandler := output.NewHandler(repo, "tests/fixtures/template.yaml")
-
 	apiMux := http.NewServeMux()
 	handler.RegisterRoutes(apiMux)
 	groupHandler.RegisterRoutes(apiMux)
 	ruleHandler.RegisterRoutes(apiMux)
-	outputHandler.RegisterRoutes(apiMux)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
+	return httptest.NewServer(mux)
+}
 
-	scheduler := refresh.NewScheduler(repo, refreshSvc.RefreshProvider, time.Minute)
-	go scheduler.Start(context.Background())
+func TestListRulesStartsEmpty(t *testing.T) {
+	ts := newTestServerWithRules(t)
+	defer ts.Close()
 
-	log.Printf("[MAIN] Starting SubHub on %s", cfg.ListenAddr)
-	log.Fatal(http.ListenAndServe(cfg.ListenAddr, mux))
+	resp, err := http.Get(ts.URL + "/api/rules")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.JSONEq(t, `{"rules":[],"page":1,"page_size":20,"total":0}`, readBody(t, resp))
 }

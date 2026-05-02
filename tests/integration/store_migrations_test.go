@@ -19,14 +19,20 @@ func TestMustOpenRecordsAppliedMigrationsOnce(t *testing.T) {
 	var appliedCount int
 	err := db.QueryRow(`SELECT COUNT(*) FROM migrations`).Scan(&appliedCount)
 	require.NoError(t, err)
-	assert.Equal(t, 1, appliedCount)
+	assert.Equal(t, 2, appliedCount)
 
-	var filename string
-	var appliedAt string
-	err = db.QueryRow(`SELECT filename, applied_at FROM migrations`).Scan(&filename, &appliedAt)
+	rows, err := db.Query(`SELECT filename, applied_at FROM migrations ORDER BY filename`)
 	require.NoError(t, err)
-	assert.Equal(t, "001_initial.sql", filename)
-	assert.NotEmpty(t, appliedAt)
+	defer rows.Close()
+	var filenames []string
+	for rows.Next() {
+		var filename, appliedAt string
+		require.NoError(t, rows.Scan(&filename, &appliedAt))
+		filenames = append(filenames, filename)
+		assert.NotEmpty(t, appliedAt)
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, []string{"001_initial.sql", "002_add_rules.sql"}, filenames)
 
 	require.NoError(t, db.Close())
 
@@ -35,7 +41,7 @@ func TestMustOpenRecordsAppliedMigrationsOnce(t *testing.T) {
 
 	err = reopened.QueryRow(`SELECT COUNT(*) FROM migrations`).Scan(&appliedCount)
 	require.NoError(t, err)
-	assert.Equal(t, 1, appliedCount)
+	assert.Equal(t, 2, appliedCount)
 }
 
 func TestMustOpenCreatesMigrationHistoryTable(t *testing.T) {
