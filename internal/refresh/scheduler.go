@@ -51,7 +51,6 @@ func (s *Scheduler) WithLogger(l *log.Logger) *Scheduler {
 }
 
 func (s *Scheduler) RunOnce(ctx context.Context) {
-	log.Printf("[SCHEDULER] Running check...")
 	providers, err := s.repo.List(ctx)
 	if err != nil {
 		s.logger.Printf("scheduler: list providers: %v", err)
@@ -62,7 +61,6 @@ func (s *Scheduler) RunOnce(ctx context.Context) {
 	for _, p := range providers {
 		dueAt := p.UpdatedAt.Add(time.Duration(p.RefreshIntervalMinutes) * time.Minute)
 		if now.Before(dueAt) {
-			log.Printf("[SCHEDULER] Provider %d (%s) is not due until %s", p.ID, p.Name, dueAt.Format("2006-01-02 15:04:05"))
 			continue
 		}
 		log.Printf("[SCHEDULER] Provider %d (%s) is due, triggering refresh", p.ID, p.Name)
