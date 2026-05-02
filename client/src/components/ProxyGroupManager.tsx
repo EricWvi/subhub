@@ -3,7 +3,7 @@ import { Table, Button, Space, Modal, Form, Input, message, Popconfirm, Typograp
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { formatDate24h } from '../utils';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 const { TextArea } = Input;
 
 interface ProxyGroup {

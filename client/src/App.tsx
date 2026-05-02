@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Layout, Menu, Typography } from 'antd';
 import ProviderManager from './components/ProviderManager';
 import ProxyGroupManager from './components/ProxyGroupManager';
+import RuleManager from './components/RuleManager';
 import "./App.css";
 
 const { Header, Content, Footer } = Layout;
@@ -21,14 +22,15 @@ const App: React.FC = () => {
           onClick={(e) => setCurrentTab(e.key)}
           items={[
             { key: 'providers', label: 'Providers' },
-            { key: 'groups', label: 'Proxy Groups' }
+            { key: 'groups', label: 'Proxy Groups' },
+            { key: 'rules', label: 'Rules' }
           ]}
           style={{ flex: 1, marginLeft: '24px' }}
         />
       </Header>
       <Content style={{ padding: '0 50px' }}>
         <div style={{ background: '#fff', padding: 24, minHeight: 280, marginTop: '24px' }}>
-          {currentTab === 'providers' ? <ProviderManager /> : <ProxyGroupManager />}
+          {currentTab === 'providers' ? <ProviderManager /> : currentTab === 'groups' ? <ProxyGroupManager /> : <RuleManager />}
         </div>
       </Content>
       <Footer style={{ textAlign: 'center' }}>SubHub ©2026 Created by Gemini CLI</Footer>
