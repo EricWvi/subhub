@@ -251,6 +251,46 @@ func TestRefreshPersistsLatestSubscriptionUserinfo(t *testing.T) {
 	assert.EqualValues(t, 1893456000, p.Expire)
 }
 
+func TestRefreshReplacesProviderNodesUsingUpdateMarkSweep(t *testing.T) {
+	firstPayload := []byte("proxies:\n  - {name: vmess-hk-01, type: vmess, server: hk.example.com, port: 443}\n  - {name: ss-jp-01, type: ss, server: jp.example.com, port: 443, cipher: aes-128-gcm, password: secret}\n")
+	secondPayload := []byte("proxies:\n  - {name: vmess-hk-01, type: vmess, server: hk2.example.com, port: 8443}\n  - {name: trojan-sg-01, type: trojan, server: sg.example.com, port: 443, password: secret}\n")
+
+	var current atomic.Pointer[[]byte]
+	current.Store(&firstPayload)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/yaml")
+		payload := current.Load()
+		_, _ = w.Write(*payload)
+	}))
+	defer upstream.Close()
+
+	ts, repo := newTestServerWithRefresh(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"alpha","url":"%s"}`, upstream.URL))
+
+	resp1 := refreshProvider(t, ts.URL, providerID)
+	defer resp1.Body.Close()
+	require.Equal(t, http.StatusNoContent, resp1.StatusCode)
+
+	current.Store(&secondPayload)
+
+	resp2 := refreshProvider(t, ts.URL, providerID)
+	defer resp2.Body.Close()
+	require.Equal(t, http.StatusNoContent, resp2.StatusCode)
+
+	nodes, err := repo.ListProxyNodesByProvider(context.Background(), providerID)
+	require.NoError(t, err)
+	require.Len(t, nodes, 2)
+	assert.Equal(t, "vmess-hk-01", nodes[0].Name)
+	assert.Equal(t, int64(0), nodes[0].UpdateMark)
+	assert.Contains(t, nodes[0].RawYAML, "hk2.example.com")
+	assert.Equal(t, "trojan-sg-01", nodes[1].Name)
+	assert.Equal(t, int64(0), nodes[1].UpdateMark)
+	assert.Contains(t, nodes[1].RawYAML, "sg.example.com")
+}
+
 func TestMihomoOutputEmptyWhenNoSnapshots(t *testing.T) {
 	ts, _ := newTestServerWithRefresh(t)
 	defer ts.Close()

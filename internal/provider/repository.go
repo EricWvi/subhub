@@ -177,6 +177,35 @@ func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerI
 		return err
 	}
 
+	_, err = tx.ExecContext(ctx, `UPDATE proxy_nodes SET update_mark = 1 WHERE provider_id = ?`, providerID)
+	if err != nil {
+		return err
+	}
+
+	for _, node := range in.Nodes {
+		name, _ := node["name"].(string)
+		raw, err := yaml.Marshal(node)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO proxy_nodes (provider_id, name, raw_yaml, update_mark)
+			 VALUES (?, ?, ?, 0)
+			 ON CONFLICT(provider_id, name) DO UPDATE SET
+			 	raw_yaml = excluded.raw_yaml,
+			 	update_mark = 0`,
+			providerID, name, string(raw),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.ExecContext(ctx, `DELETE FROM proxy_nodes WHERE provider_id = ? AND update_mark = 1`, providerID)
+	if err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
 
@@ -188,6 +217,30 @@ func (r *Repository) RecordRefreshFailure(ctx context.Context, providerID int64,
 		providerID, message, now.Format(time.RFC3339),
 	)
 	return err
+}
+
+func (r *Repository) ListProxyNodesByProvider(ctx context.Context, providerID int64) ([]ProxyNode, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, provider_id, name, raw_yaml, update_mark
+		 FROM proxy_nodes
+		 WHERE provider_id = ?
+		 ORDER BY id`,
+		providerID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var nodes []ProxyNode
+	for rows.Next() {
+		var n ProxyNode
+		if err := rows.Scan(&n.ID, &n.ProviderID, &n.Name, &n.RawYAML, &n.UpdateMark); err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, n)
+	}
+	return nodes, rows.Err()
 }
 
 func (r *Repository) GetLatestSnapshot(ctx context.Context, providerID int64) (Snapshot, error) {
