@@ -16,8 +16,15 @@ var (
 	ErrSubscriptionNameRequired = errors.New("subscription name is required")
 	ErrProvidersRequired        = errors.New("at least one provider is required")
 	ErrReservedProxyGroup       = errors.New("Proxies proxy-group cannot be deleted")
+	ErrReservedProxiesRequired  = errors.New("Proxies proxy-group is required at position 0")
+	ErrReservedProxiesNotFirst  = errors.New("Proxies proxy-group must stay first at position 0")
 	ErrDuplicateRuleBinding     = errors.New("internal proxy group already bound")
 	ErrNotFound                 = errors.New("subscription not found")
+)
+
+const (
+	reservedProxyGroupName = "Proxies"
+	reservedProxyGroupType = "select"
 )
 
 type RenderedContent struct {
@@ -63,23 +70,13 @@ func (s *Service) CreateClashConfig(ctx context.Context, in CreateClashConfigSub
 	if len(in.Providers) == 0 {
 		return ClashConfigSubscription{}, ErrProvidersRequired
 	}
-
-	sub, err := s.repo.CreateClashConfig(ctx, in)
+	proxyGroups, err := normalizeClashConfigProxyGroups(in.ProxyGroups)
 	if err != nil {
 		return ClashConfigSubscription{}, err
 	}
+	in.ProxyGroups = proxyGroups
 
-	sysPG, err := s.repo.CreateSystemProxyGroup(ctx, sub.ID, CreateClashConfigProxyGroupInput{
-		Name:    "Proxies",
-		Type:    "select",
-		Proxies: []ProxyMember{{Type: "DIRECT", Value: "DIRECT"}},
-	})
-	if err != nil {
-		return ClashConfigSubscription{}, err
-	}
-
-	sub.ProxyGroups = append([]ClashConfigProxyGroup{sysPG}, sub.ProxyGroups...)
-	return sub, nil
+	return s.repo.CreateClashConfig(ctx, in)
 }
 
 func (s *Service) GetClashConfigByID(ctx context.Context, id int64) (ClashConfigSubscription, error) {
@@ -93,7 +90,31 @@ func (s *Service) UpdateClashConfig(ctx context.Context, id int64, in UpdateClas
 	if len(in.Providers) == 0 {
 		return ClashConfigSubscription{}, ErrProvidersRequired
 	}
+	proxyGroups, err := normalizeClashConfigProxyGroups(in.ProxyGroups)
+	if err != nil {
+		return ClashConfigSubscription{}, err
+	}
+	in.ProxyGroups = proxyGroups
 	return s.repo.UpdateClashConfig(ctx, id, in)
+}
+
+func normalizeClashConfigProxyGroups(groups []CreateClashConfigProxyGroupInput) ([]CreateClashConfigProxyGroupInput, error) {
+	if len(groups) == 0 {
+		return nil, ErrReservedProxiesRequired
+	}
+	if groups[0].Name != reservedProxyGroupName || groups[0].Type != reservedProxyGroupType {
+		return nil, ErrReservedProxiesRequired
+	}
+
+	normalized := make([]CreateClashConfigProxyGroupInput, len(groups))
+	for i, group := range groups {
+		if i > 0 && group.Name == reservedProxyGroupName {
+			return nil, ErrReservedProxiesNotFirst
+		}
+		group.Position = int64(i)
+		normalized[i] = group
+	}
+	return normalized, nil
 }
 
 func (s *Service) DeleteClashConfig(ctx context.Context, id int64) error {

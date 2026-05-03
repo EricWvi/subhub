@@ -30,6 +30,7 @@ interface ProxyGroup {
   id: number;
   name: string;
   type: string;
+  position: number;
   url: string;
   interval: number;
   proxies: ProxyMember[];
@@ -56,6 +57,77 @@ interface InternalGroup {
   name: string;
 }
 
+interface ProxyGroupFormValue {
+  name: string;
+  type: string;
+  position: number;
+  url: string;
+  interval: number;
+  proxies: ProxyMember[];
+  bind_internal_proxy_group_id?: number;
+  is_system: boolean;
+}
+
+const RESERVED_PROXY_GROUP_NAME = "Proxies";
+const RESERVED_PROXY_GROUP_TYPE = "select";
+
+const createReservedProxyGroup = (): ProxyGroupFormValue => ({
+  name: RESERVED_PROXY_GROUP_NAME,
+  type: RESERVED_PROXY_GROUP_TYPE,
+  position: 0,
+  url: "",
+  interval: 0,
+  proxies: [{ type: "DIRECT", value: "DIRECT" }],
+  bind_internal_proxy_group_id: undefined,
+  is_system: true,
+});
+
+const normalizeProxyGroupMembers = (
+  proxies?: ProxyMember[],
+): ProxyMember[] =>
+  (proxies || []).map((proxy) => ({
+    type: proxy.type,
+    value: proxy.value,
+  }));
+
+const normalizeProxyGroups = (
+  proxyGroups?: Partial<ProxyGroupFormValue>[],
+): ProxyGroupFormValue[] => {
+  const groups = [...(proxyGroups || [])].sort(
+    (a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER),
+  );
+  const reservedGroup = groups.find(
+    (group) => group.name === RESERVED_PROXY_GROUP_NAME,
+  );
+  const editableGroups = groups.filter(
+    (group) => group.name !== RESERVED_PROXY_GROUP_NAME,
+  );
+
+  return [
+    {
+      ...createReservedProxyGroup(),
+      bind_internal_proxy_group_id: reservedGroup?.bind_internal_proxy_group_id,
+      proxies: normalizeProxyGroupMembers(reservedGroup?.proxies).length
+        ? normalizeProxyGroupMembers(reservedGroup?.proxies)
+        : createReservedProxyGroup().proxies,
+    },
+    ...editableGroups.map((group) => ({
+      name: group.name || "",
+      type: group.type || "select",
+      position: 0,
+      url: group.url || "",
+      interval: group.interval || 0,
+      proxies: normalizeProxyGroupMembers(group.proxies),
+      bind_internal_proxy_group_id: group.bind_internal_proxy_group_id,
+      is_system: false,
+    })),
+  ].map((group, index) => ({
+    ...group,
+    position: index,
+    is_system: index === 0,
+  }));
+};
+
 const ClashConfigSubscriptionManager: React.FC = () => {
   const [subscriptions, setSubscriptions] = useState<ClashConfigSubscription[]>(
     [],
@@ -67,6 +139,9 @@ const ClashConfigSubscriptionManager: React.FC = () => {
   const [editingSub, setEditingSub] = useState<ClashConfigSubscription | null>(
     null,
   );
+  const [activeProxyGroupKey, setActiveProxyGroupKey] = useState<string[]>([
+    "0",
+  ]);
   const [form] = Form.useForm();
 
   const fetchSubscriptions = async () => {
@@ -113,25 +188,35 @@ const ClashConfigSubscriptionManager: React.FC = () => {
   const handleAdd = () => {
     setEditingSub(null);
     form.resetFields();
-    form.setFieldsValue({ name: "", providers: [], proxy_groups: [] });
+    form.setFieldsValue({
+      name: "",
+      providers: [],
+      proxy_groups: [createReservedProxyGroup()],
+    });
+    setActiveProxyGroupKey(["0"]);
     setModalVisible(true);
   };
 
   const handleEdit = (record: ClashConfigSubscription) => {
     setEditingSub(record);
-    form.setFieldsValue({
-      name: record.name,
-      providers: record.providers,
-      proxy_groups: record.proxy_groups.map((pg) => ({
+    const proxyGroups = normalizeProxyGroups(
+      record.proxy_groups.map((pg) => ({
         name: pg.name,
         type: pg.type,
+        position: pg.position,
         url: pg.url,
         interval: pg.interval,
         bind_internal_proxy_group_id: pg.bind_internal_proxy_group_id,
         is_system: pg.is_system,
         proxies: pg.proxies.map((p) => ({ type: p.type, value: p.value })),
       })),
+    );
+    form.setFieldsValue({
+      name: record.name,
+      providers: record.providers,
+      proxy_groups: proxyGroups,
     });
+    setActiveProxyGroupKey(["0"]);
     setModalVisible(true);
   };
 
@@ -150,6 +235,10 @@ const ClashConfigSubscriptionManager: React.FC = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
+      const payload = {
+        ...values,
+        proxy_groups: normalizeProxyGroups(values.proxy_groups),
+      };
       const url = editingSub
         ? `/api/subscriptions/clash-configs/${editingSub.id}`
         : "/api/subscriptions/clash-configs";
@@ -158,7 +247,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -315,6 +404,13 @@ const ClashConfigSubscriptionManager: React.FC = () => {
           <Form.List name="proxy_groups">
             {(fields, { add, remove }) => (
               <>
+                {/* UX target:
+                - [ ] Add opens with a visible Proxies group already present
+                - [ ] Proxies stays first, fixed-name/type, and non-deletable
+                - [ ] Proxies keeps editable Rules Bound Group and Members
+                - [ ] New user-created groups append after Proxies
+                - [ ] Submit payload preserves list order via position and reserved-row is_system semantics
+                */}
                 <div
                   style={{
                     marginBottom: 8,
@@ -326,31 +422,41 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                   <Button
                     size="small"
                     icon={<PlusOutlined />}
-                    onClick={() =>
+                    onClick={() => {
                       add({
                         name: "",
                         type: "select",
+                        position: fields.length,
                         url: "",
                         interval: 0,
                         proxies: [],
                         bind_internal_proxy_group_id: undefined,
                         is_system: false,
-                      })
-                    }
+                      });
+                      setActiveProxyGroupKey([String(fields.length)]);
+                    }}
                   >
                     Add Proxy Group
                   </Button>
                 </div>
-                <Collapse accordion>
+                <Collapse
+                  accordion
+                  activeKey={activeProxyGroupKey}
+                  onChange={(key) =>
+                    setActiveProxyGroupKey(
+                      Array.isArray(key) ? key.map(String) : key ? [String(key)] : [],
+                    )
+                  }
+                >
                   {fields.map((field) => {
-                    const isSystem = form.getFieldValue([
+                    const isReservedGroup = form.getFieldValue([
                       "proxy_groups",
                       field.name,
                       "is_system",
                     ]);
                     return (
                       <Collapse.Panel
-                        key={field.key}
+                        key={String(field.name)}
                         header={
                           <Form.Item
                             noStyle
@@ -368,13 +474,15 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                                     "name",
                                   ]) || "New Group"}
                                 </Text>
-                                {isSystem && <Tag color="blue">System</Tag>}
+                                {isReservedGroup && (
+                                  <Tag color="blue">System</Tag>
+                                )}
                               </Space>
                             )}
                           </Form.Item>
                         }
                         extra={
-                          !isSystem && (
+                          !isReservedGroup && (
                             <Popconfirm
                               title="Remove this group?"
                               onConfirm={() => remove(field.name)}
@@ -390,12 +498,18 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                         <Form.Item name={[field.name, "is_system"]} hidden>
                           <Input />
                         </Form.Item>
+                        <Form.Item name={[field.name, "position"]} hidden>
+                          <InputNumber />
+                        </Form.Item>
                         <Form.Item
                           name={[field.name, "name"]}
                           label="Name"
                           rules={[{ required: true }]}
                         >
-                          <Input placeholder="Media" disabled={isSystem} />
+                          <Input
+                            placeholder="Media"
+                            disabled={isReservedGroup}
+                          />
                         </Form.Item>
                         <Form.Item
                           name={[field.name, "type"]}
@@ -403,7 +517,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                           rules={[{ required: true }]}
                         >
                           <Select
-                            disabled={isSystem}
+                            disabled={isReservedGroup}
                             options={[
                               { label: "select", value: "select" },
                               { label: "url-test", value: "url-test" },

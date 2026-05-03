@@ -15,6 +15,7 @@ type ClashConfigProxyGroup struct {
 	ID                  int64         `json:"id"`
 	Name                string        `json:"name"`
 	Type                string        `json:"type"`
+	Position            int64         `json:"position"`
 	URL                 string        `json:"url"`
 	Interval            int64         `json:"interval"`
 	Proxies             []ProxyMember `json:"proxies"`
@@ -46,14 +47,15 @@ type RuleProviderSubscription struct {
 }
 
 type CreateClashConfigSubscriptionInput struct {
-	Name        string                            `json:"name"`
-	Providers   []int64                           `json:"providers"`
+	Name        string                             `json:"name"`
+	Providers   []int64                            `json:"providers"`
 	ProxyGroups []CreateClashConfigProxyGroupInput `json:"proxy_groups"`
 }
 
 type CreateClashConfigProxyGroupInput struct {
 	Name                string        `json:"name"`
 	Type                string        `json:"type"`
+	Position            int64         `json:"position"`
 	URL                 string        `json:"url"`
 	Interval            int64         `json:"interval"`
 	Proxies             []ProxyMember `json:"proxies"`
@@ -61,8 +63,8 @@ type CreateClashConfigProxyGroupInput struct {
 }
 
 type UpdateClashConfigSubscriptionInput struct {
-	Name        string                            `json:"name"`
-	Providers   []int64                           `json:"providers"`
+	Name        string                             `json:"name"`
+	Providers   []int64                            `json:"providers"`
 	ProxyGroups []CreateClashConfigProxyGroupInput `json:"proxy_groups"`
 }
 

@@ -129,7 +129,7 @@ func (r *Repository) ListRuleProviders(ctx context.Context) ([]RuleProviderSubsc
 }
 
 func (r *Repository) CreateClashConfig(ctx context.Context, in CreateClashConfigSubscriptionInput) (ClashConfigSubscription, error) {
-	var sub ClashConfigSubscription
+	var subID int64
 
 	err := func() error {
 		tx, err := r.db.BeginTx(ctx, nil)
@@ -148,7 +148,7 @@ func (r *Repository) CreateClashConfig(ctx context.Context, in CreateClashConfig
 		if err != nil {
 			return err
 		}
-		subID, _ := result.LastInsertId()
+		subID, _ = result.LastInsertId()
 
 		for i, pid := range in.Providers {
 			_, err = tx.ExecContext(ctx,
@@ -160,7 +160,8 @@ func (r *Repository) CreateClashConfig(ctx context.Context, in CreateClashConfig
 			}
 		}
 
-		for _, pg := range in.ProxyGroups {
+		for i, pg := range in.ProxyGroups {
+			pg.Position = int64(i)
 			_, err = insertProxyGroup(ctx, tx, subID, pg, nowStr)
 			if err != nil {
 				return err
@@ -171,28 +172,20 @@ func (r *Repository) CreateClashConfig(ctx context.Context, in CreateClashConfig
 			return err
 		}
 
-		sub = ClashConfigSubscription{
-			ID:          subID,
-			Name:        in.Name,
-			Providers:   in.Providers,
-			ProxyGroups: nil,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		}
 		return nil
 	}()
 	if err != nil {
 		return ClashConfigSubscription{}, err
 	}
 
-	return sub, nil
+	return r.GetClashConfigByID(ctx, subID)
 }
 
 func insertProxyGroup(ctx context.Context, tx *sql.Tx, subID int64, pg CreateClashConfigProxyGroupInput, nowStr string) (int64, error) {
 	isSystem := 0
 	result, err := tx.ExecContext(ctx,
-		`INSERT INTO clash_config_proxy_groups (subscription_id, name, type, url, interval_seconds, bind_internal_proxy_group_id, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		subID, pg.Name, pg.Type, pg.URL, pg.Interval, pg.BindInternalGroupID, isSystem, nowStr, nowStr,
+		`INSERT INTO clash_config_proxy_groups (subscription_id, name, type, position, url, interval_seconds, bind_internal_proxy_group_id, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		subID, pg.Name, pg.Type, pg.Position, pg.URL, pg.Interval, pg.BindInternalGroupID, isSystem, nowStr, nowStr,
 	)
 	if err != nil {
 		return 0, err
@@ -253,6 +246,7 @@ func (r *Repository) CreateSystemProxyGroup(ctx context.Context, subscriptionID 
 		ID:                  pgID,
 		Name:                in.Name,
 		Type:                in.Type,
+		Position:            0,
 		URL:                 in.URL,
 		Interval:            in.Interval,
 		Proxies:             in.Proxies,
@@ -304,7 +298,7 @@ func (r *Repository) GetClashConfigByID(ctx context.Context, id int64) (ClashCon
 		}
 
 		pgRows, err := tx.QueryContext(ctx,
-			`SELECT id, name, type, url, interval_seconds, bind_internal_proxy_group_id, is_system FROM clash_config_proxy_groups WHERE subscription_id = ? ORDER BY id`, id,
+			`SELECT id, name, type, position, url, interval_seconds, bind_internal_proxy_group_id, is_system FROM clash_config_proxy_groups WHERE subscription_id = ? ORDER BY position, id`, id,
 		)
 		if err != nil {
 			return err
@@ -315,7 +309,7 @@ func (r *Repository) GetClashConfigByID(ctx context.Context, id int64) (ClashCon
 			var g ClashConfigProxyGroup
 			var isSystem int64
 			var bindID sql.NullInt64
-			if err := pgRows.Scan(&g.ID, &g.Name, &g.Type, &g.URL, &g.Interval, &bindID, &isSystem); err != nil {
+			if err := pgRows.Scan(&g.ID, &g.Name, &g.Type, &g.Position, &g.URL, &g.Interval, &bindID, &isSystem); err != nil {
 				pgRows.Close()
 				return err
 			}
@@ -384,7 +378,7 @@ func (r *Repository) loadClashConfigProviders(ctx context.Context, subID int64) 
 
 func (r *Repository) loadClashConfigProxyGroups(ctx context.Context, subID int64) ([]ClashConfigProxyGroup, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, name, type, url, interval_seconds, bind_internal_proxy_group_id, is_system FROM clash_config_proxy_groups WHERE subscription_id = ? ORDER BY id`, subID,
+		`SELECT id, name, type, position, url, interval_seconds, bind_internal_proxy_group_id, is_system FROM clash_config_proxy_groups WHERE subscription_id = ? ORDER BY position, id`, subID,
 	)
 	if err != nil {
 		return nil, err
@@ -395,7 +389,7 @@ func (r *Repository) loadClashConfigProxyGroups(ctx context.Context, subID int64
 		var g ClashConfigProxyGroup
 		var isSystem int64
 		var bindID sql.NullInt64
-		if err := rows.Scan(&g.ID, &g.Name, &g.Type, &g.URL, &g.Interval, &bindID, &isSystem); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Type, &g.Position, &g.URL, &g.Interval, &bindID, &isSystem); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -447,8 +441,6 @@ func (r *Repository) loadProxyGroupMembers(ctx context.Context, pgID int64) ([]P
 }
 
 func (r *Repository) UpdateClashConfig(ctx context.Context, id int64, in UpdateClashConfigSubscriptionInput) (ClashConfigSubscription, error) {
-	var sub ClashConfigSubscription
-
 	err := func() error {
 		tx, err := r.db.BeginTx(ctx, nil)
 		if err != nil {
@@ -456,8 +448,7 @@ func (r *Repository) UpdateClashConfig(ctx context.Context, id int64, in UpdateC
 		}
 		defer tx.Rollback()
 
-		now := nowInLocation()
-		nowStr := now.Format(time.RFC3339)
+		nowStr := nowInLocation().Format(time.RFC3339)
 
 		_, err = tx.ExecContext(ctx,
 			`UPDATE clash_config_subscriptions SET name = ?, updated_at = ? WHERE id = ?`,
@@ -467,12 +458,12 @@ func (r *Repository) UpdateClashConfig(ctx context.Context, id int64, in UpdateC
 			return err
 		}
 
-		_, err = tx.ExecContext(ctx, `DELETE FROM clash_config_proxy_group_members WHERE proxy_group_id IN (SELECT id FROM clash_config_proxy_groups WHERE subscription_id = ? AND is_system = 0)`, id)
+		_, err = tx.ExecContext(ctx, `DELETE FROM clash_config_proxy_group_members WHERE proxy_group_id IN (SELECT id FROM clash_config_proxy_groups WHERE subscription_id = ?)`, id)
 		if err != nil {
 			return err
 		}
 
-		_, err = tx.ExecContext(ctx, `DELETE FROM clash_config_proxy_groups WHERE subscription_id = ? AND is_system = 0`, id)
+		_, err = tx.ExecContext(ctx, `DELETE FROM clash_config_proxy_groups WHERE subscription_id = ?`, id)
 		if err != nil {
 			return err
 		}
@@ -492,7 +483,8 @@ func (r *Repository) UpdateClashConfig(ctx context.Context, id int64, in UpdateC
 			}
 		}
 
-		for _, pg := range in.ProxyGroups {
+		for i, pg := range in.ProxyGroups {
+			pg.Position = int64(i)
 			_, err = insertProxyGroup(ctx, tx, id, pg, nowStr)
 			if err != nil {
 				return err
@@ -502,21 +494,13 @@ func (r *Repository) UpdateClashConfig(ctx context.Context, id int64, in UpdateC
 		if err := tx.Commit(); err != nil {
 			return err
 		}
-
-		sub = ClashConfigSubscription{
-			ID:        id,
-			Name:      in.Name,
-			Providers: in.Providers,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
 		return nil
 	}()
 	if err != nil {
 		return ClashConfigSubscription{}, err
 	}
 
-	return sub, nil
+	return r.GetClashConfigByID(ctx, id)
 }
 
 func (r *Repository) DeleteClashConfig(ctx context.Context, id int64) error {

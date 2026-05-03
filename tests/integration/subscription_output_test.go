@@ -67,7 +67,7 @@ func newTestServerWithSubscriptionOutput(t *testing.T) (*httptest.Server, *provi
 	return httptest.NewServer(mux), providerRepo
 }
 
-func TestClashConfigContentReturnsYAMLWithNodes(t *testing.T) {
+func TestClashConfigContentBuildsFromStoredComponents(t *testing.T) {
 	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
 	require.NoError(t, err)
 
@@ -86,6 +86,7 @@ func TestClashConfigContentReturnsYAMLWithNodes(t *testing.T) {
 	defer refreshResp.Body.Close()
 	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
 
+	proxiesGroupID := createProxyGroup(t, ts.URL, `{"name":"DefaultNodes","script":""}`)
 	internalGroupID := createProxyGroup(t, ts.URL, `{"name":"AllNodes","script":""}`)
 
 	createResp := postJSON(t, ts.URL+"/api/subscriptions/clash-configs", fmt.Sprintf(`{
@@ -93,13 +94,21 @@ func TestClashConfigContentReturnsYAMLWithNodes(t *testing.T) {
 		"providers":[%d],
 		"proxy_groups":[
 			{
+				"name":"Proxies",
+				"type":"select",
+				"position":0,
+				"proxies":[{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
 				"name":"MyProxies",
 				"type":"select",
+				"position":1,
 				"proxies":[{"type":"internal","value":"%d"},{"type":"DIRECT","value":"DIRECT"}],
 				"bind_internal_proxy_group_id":%d
 			}
 		]
-	}`, providerID, internalGroupID, internalGroupID))
+	}`, providerID, proxiesGroupID, internalGroupID, internalGroupID))
 	defer createResp.Body.Close()
 	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
@@ -117,6 +126,79 @@ func TestClashConfigContentReturnsYAMLWithNodes(t *testing.T) {
 	assert.Contains(t, body, "name: MyProxies")
 	assert.Contains(t, body, "name: Final")
 	assert.Contains(t, body, "rules:")
+}
+
+func TestClashConfigSubscriptionContentRendersProxyGroupsInStoredOrder(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
+	require.NoError(t, err)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/yaml")
+		w.Header().Set("Subscription-Userinfo", "upload=0; download=100; total=1000; expire=1893456000")
+		w.Write(fixture)
+	}))
+	defer upstream.Close()
+
+	ts, _ := newTestServerWithSubscriptionOutput(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"alpha","url":"%s"}`, upstream.URL))
+	refreshResp := refreshProvider(t, ts.URL, providerID)
+	defer refreshResp.Body.Close()
+	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
+
+	proxiesGroupID := createProxyGroup(t, ts.URL, `{"name":"Streaming","script":""}`)
+	autoGroupID := createProxyGroup(t, ts.URL, `{"name":"AutoNodes","script":""}`)
+	fallbackGroupID := createProxyGroup(t, ts.URL, `{"name":"FallbackNodes","script":""}`)
+
+	createResp := postJSON(t, ts.URL+"/api/subscriptions/clash-configs", fmt.Sprintf(`{
+		"name":"Stored Order",
+		"providers":[%d],
+		"proxy_groups":[
+			{
+				"name":"Proxies",
+				"type":"select",
+				"position":0,
+				"proxies":[{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
+				"name":"Auto",
+				"type":"url-test",
+				"position":1,
+				"url":"https://cp.cloudflare.com/generate_204",
+				"interval":300,
+				"proxies":[{"type":"internal","value":"%d"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
+				"name":"Fallback",
+				"type":"fallback",
+				"position":2,
+				"url":"https://cp.cloudflare.com/generate_204",
+				"interval":300,
+				"proxies":[{"type":"reference","value":"Auto"}],
+				"bind_internal_proxy_group_id":%d
+			}
+		]
+	}`, providerID, proxiesGroupID, autoGroupID, autoGroupID, fallbackGroupID))
+	defer createResp.Body.Close()
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
+
+	contentResp, err := http.Get(ts.URL + "/api/subscriptions/clash-configs/1/content")
+	require.NoError(t, err)
+	defer contentResp.Body.Close()
+	require.Equal(t, http.StatusOK, contentResp.StatusCode)
+
+	body := readBody(t, contentResp)
+	proxiesIndex := strings.Index(body, "name: Proxies")
+	autoIndex := strings.Index(body, "name: Auto")
+	fallbackIndex := strings.Index(body, "name: Fallback")
+	require.NotEqual(t, -1, proxiesIndex)
+	require.NotEqual(t, -1, autoIndex)
+	require.NotEqual(t, -1, fallbackIndex)
+	assert.Less(t, proxiesIndex, autoIndex)
+	assert.Less(t, autoIndex, fallbackIndex)
 }
 
 func TestClashConfigContentReturns404ForMissing(t *testing.T) {
@@ -148,6 +230,7 @@ func TestClashConfigContentRemapsRulesToOutputGroups(t *testing.T) {
 	defer refreshResp.Body.Close()
 	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
 
+	proxiesGroupID := createProxyGroup(t, ts.URL, `{"name":"DefaultStreaming","script":""}`)
 	internalGroupID := createProxyGroup(t, ts.URL, `{"name":"Streaming","script":""}`)
 
 	postJSON(t, ts.URL+"/api/rules", fmt.Sprintf(`{"rule_type":"DOMAIN-SUFFIX","pattern":"netflix.com","proxy_group":"Streaming"}`)).Body.Close()
@@ -158,13 +241,21 @@ func TestClashConfigContentRemapsRulesToOutputGroups(t *testing.T) {
 		"providers":[%d],
 		"proxy_groups":[
 			{
+				"name":"Proxies",
+				"type":"select",
+				"position":0,
+				"proxies":[{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
 				"name":"Media",
 				"type":"select",
+				"position":1,
 				"proxies":[{"type":"internal","value":"%d"},{"type":"DIRECT","value":"DIRECT"}],
 				"bind_internal_proxy_group_id":%d
 			}
 		]
-	}`, providerID, internalGroupID, internalGroupID))
+	}`, providerID, proxiesGroupID, internalGroupID, internalGroupID))
 	defer createResp.Body.Close()
 	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
@@ -196,6 +287,7 @@ func TestClashConfigContentExcludesInvalidProviders(t *testing.T) {
 	defer refreshResp.Body.Close()
 	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
 
+	proxiesGroupID := createProxyGroup(t, ts.URL, `{"name":"DefaultNodes","script":""}`)
 	internalGroupID := createProxyGroup(t, ts.URL, `{"name":"AllNodes","script":""}`)
 
 	createResp := postJSON(t, ts.URL+"/api/subscriptions/clash-configs", fmt.Sprintf(`{
@@ -203,13 +295,21 @@ func TestClashConfigContentExcludesInvalidProviders(t *testing.T) {
 		"providers":[%d],
 		"proxy_groups":[
 			{
+				"name":"Proxies",
+				"type":"select",
+				"position":0,
+				"proxies":[{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
 				"name":"MyProxies",
 				"type":"select",
+				"position":1,
 				"proxies":[{"type":"internal","value":"%d"},{"type":"DIRECT","value":"DIRECT"}],
 				"bind_internal_proxy_group_id":%d
 			}
 		]
-	}`, providerID, internalGroupID, internalGroupID))
+	}`, providerID, proxiesGroupID, internalGroupID, internalGroupID))
 	defer createResp.Body.Close()
 	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
@@ -242,6 +342,7 @@ func TestClashConfigContentIncludesTemplateRules(t *testing.T) {
 	defer refreshResp.Body.Close()
 	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
 
+	proxiesGroupID := createProxyGroup(t, ts.URL, `{"name":"DefaultNodes","script":""}`)
 	internalGroupID := createProxyGroup(t, ts.URL, `{"name":"AllNodes","script":""}`)
 
 	createResp := postJSON(t, ts.URL+"/api/subscriptions/clash-configs", fmt.Sprintf(`{
@@ -249,13 +350,21 @@ func TestClashConfigContentIncludesTemplateRules(t *testing.T) {
 		"providers":[%d],
 		"proxy_groups":[
 			{
+				"name":"Proxies",
+				"type":"select",
+				"position":0,
+				"proxies":[{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
 				"name":"MyProxies",
 				"type":"select",
+				"position":1,
 				"proxies":[{"type":"internal","value":"%d"},{"type":"DIRECT","value":"DIRECT"}],
 				"bind_internal_proxy_group_id":%d
 			}
 		]
-	}`, providerID, internalGroupID, internalGroupID))
+	}`, providerID, proxiesGroupID, internalGroupID, internalGroupID))
 	defer createResp.Body.Close()
 	require.Equal(t, http.StatusCreated, createResp.StatusCode)
 
@@ -328,4 +437,103 @@ func TestRuleProviderSubscriptionContentExportsYamlPayload(t *testing.T) {
 	body := readBody(t, contentResp)
 	assert.Contains(t, body, "payload:")
 	assert.Contains(t, body, "DOMAIN-SUFFIX,google.com,Rules")
+}
+
+func TestClashConfigSubscriptionContentRendersUpdatedProxyGroupOrder(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
+	require.NoError(t, err)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/yaml")
+		w.Header().Set("Subscription-Userinfo", "upload=0; download=100; total=1000; expire=1893456000")
+		w.Write(fixture)
+	}))
+	defer upstream.Close()
+
+	ts, _ := newTestServerWithSubscriptionOutput(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"alpha","url":"%s"}`, upstream.URL))
+	refreshResp := refreshProvider(t, ts.URL, providerID)
+	defer refreshResp.Body.Close()
+	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
+
+	proxiesGroupID := createProxyGroup(t, ts.URL, `{"name":"DefaultNodes","script":""}`)
+	autoGroupID := createProxyGroup(t, ts.URL, `{"name":"AutoNodes","script":""}`)
+	fallbackGroupID := createProxyGroup(t, ts.URL, `{"name":"FallbackNodes","script":""}`)
+
+	createResp := postJSON(t, ts.URL+"/api/subscriptions/clash-configs", fmt.Sprintf(`{
+		"name":"Render Update",
+		"providers":[%d],
+		"proxy_groups":[
+			{
+				"name":"Proxies",
+				"type":"select",
+				"position":0,
+				"proxies":[{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
+				"name":"Auto",
+				"type":"select",
+				"position":1,
+				"proxies":[{"type":"internal","value":"%d"},{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
+				"name":"Fallback",
+				"type":"select",
+				"position":2,
+				"proxies":[{"type":"internal","value":"%d"},{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			}
+		]
+	}`, providerID, proxiesGroupID, autoGroupID, autoGroupID, fallbackGroupID, fallbackGroupID))
+	defer createResp.Body.Close()
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
+
+	updateResp := putJSON(t, ts.URL+"/api/subscriptions/clash-configs/1", fmt.Sprintf(`{
+		"name":"Render Update",
+		"providers":[%d],
+		"proxy_groups":[
+			{
+				"name":"Proxies",
+				"type":"select",
+				"position":50,
+				"proxies":[{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
+				"name":"Fallback",
+				"type":"select",
+				"position":20,
+				"proxies":[{"type":"internal","value":"%d"},{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
+				"name":"Auto",
+				"type":"select",
+				"position":10,
+				"proxies":[{"type":"internal","value":"%d"},{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			}
+		]
+	}`, providerID, proxiesGroupID, fallbackGroupID, fallbackGroupID, autoGroupID, autoGroupID))
+	defer updateResp.Body.Close()
+	require.Equal(t, http.StatusOK, updateResp.StatusCode)
+
+	contentResp, err := http.Get(ts.URL + "/api/subscriptions/clash-configs/1/content")
+	require.NoError(t, err)
+	defer contentResp.Body.Close()
+	require.Equal(t, http.StatusOK, contentResp.StatusCode)
+
+	body := readBody(t, contentResp)
+	proxiesIndex := strings.Index(body, "name: Proxies")
+	fallbackIndex := strings.Index(body, "name: Fallback")
+	autoIndex := strings.Index(body, "name: Auto")
+	require.NotEqual(t, -1, proxiesIndex)
+	require.NotEqual(t, -1, fallbackIndex)
+	require.NotEqual(t, -1, autoIndex)
+	assert.Less(t, proxiesIndex, fallbackIndex)
+	assert.Less(t, fallbackIndex, autoIndex)
 }

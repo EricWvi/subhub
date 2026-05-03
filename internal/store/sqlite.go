@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -83,9 +84,16 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("begin migration %s: %w", entry.Name(), err)
 		}
 
-		if _, err := tx.Exec(string(data)); err != nil {
+		skipExec, err := shouldSkipMigration(tx, entry.Name())
+		if err != nil {
 			tx.Rollback()
-			return fmt.Errorf("exec migration %s: %w", entry.Name(), err)
+			return fmt.Errorf("prepare migration %s: %w", entry.Name(), err)
+		}
+		if !skipExec {
+			if _, err := tx.Exec(string(data)); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("exec migration %s: %w", entry.Name(), err)
+			}
 		}
 
 		appliedAt := time.Now().In(location).Format(time.RFC3339)
@@ -112,4 +120,33 @@ func migrationApplied(db *sql.DB, filename string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func shouldSkipMigration(tx *sql.Tx, filename string) (bool, error) {
+	if filename != "004_add_clash_config_proxy_group_position.sql" {
+		return false, nil
+	}
+
+	rows, err := tx.Query(`PRAGMA table_info(clash_config_proxy_groups)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if strings.EqualFold(name, "position") {
+			return true, nil
+		}
+	}
+
+	return false, rows.Err()
 }
