@@ -261,7 +261,8 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 	}
 
 	var mappedRules []string
-	for _, r := range ruleRows {
+	for i := len(ruleRows) - 1; i >= 0; i-- {
+		r := ruleRows[i]
 		var target string
 		if r.TargetKind == "PROXY_GROUP" && r.ProxyGroupID.Valid {
 			if name, ok := bindMap[r.ProxyGroupID.Int64]; ok {

@@ -16,7 +16,7 @@ import {
   Tag,
   Collapse,
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined } from "@ant-design/icons";
 import { formatDate24h } from "../utils";
 
 const { Title, Text } = Typography;
@@ -263,6 +263,12 @@ const ClashConfigSubscriptionManager: React.FC = () => {
     }
   };
 
+  const handleCopy = (id: number) => {
+    const url = `${window.location.protocol}//${window.location.host}/api/subscriptions/clash-configs/${id}/content`;
+    navigator.clipboard.writeText(url);
+    message.success("Subscription URL copied to clipboard");
+  };
+
   const providerMap = Object.fromEntries(providers.map((p) => [p.id, p.name]));
   const groupMap = Object.fromEntries(
     internalGroups.map((g) => [g.id, g.name]),
@@ -312,6 +318,11 @@ const ClashConfigSubscriptionManager: React.FC = () => {
             key: "action",
             render: (_: any, record: ClashConfigSubscription) => (
               <Space>
+                <Button
+                  icon={<CopyOutlined />}
+                  onClick={() => handleCopy(record.id)}
+                  title="Copy Subscription URL"
+                />
                 <Button
                   icon={<EditOutlined />}
                   onClick={() => handleEdit(record)}

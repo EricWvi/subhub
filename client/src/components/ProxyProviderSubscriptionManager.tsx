@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Typography } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons';
 import { formatDate24h } from '../utils';
 
 const { Title } = Typography;
@@ -91,6 +91,12 @@ const ProxyProviderSubscriptionManager: React.FC = () => {
     } catch (error) { /* form validation */ }
   };
 
+  const handleCopy = (id: number) => {
+    const url = `${window.location.protocol}//${window.location.host}/api/subscriptions/proxy-providers/${id}/content`;
+    navigator.clipboard.writeText(url);
+    message.success('Subscription URL copied to clipboard');
+  };
+
   const providerMap = Object.fromEntries(providers.map(p => [p.id, p.name]));
   const groupMap = Object.fromEntries(internalGroups.map(g => [g.id, g.name]));
 
@@ -111,6 +117,7 @@ const ProxyProviderSubscriptionManager: React.FC = () => {
             title: 'Action', key: 'action',
             render: (_: any, r: ProxyProviderSubscription) => (
               <Space>
+                <Button icon={<CopyOutlined />} onClick={() => handleCopy(r.id)} title="Copy Link" />
                 <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} />
                 <Popconfirm title="Sure to delete?" onConfirm={() => handleDelete(r.id)}>
                   <Button danger icon={<DeleteOutlined />} />

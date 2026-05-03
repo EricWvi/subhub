@@ -28,9 +28,9 @@ func normalizeListInput(in ListRulesInput) ListRulesInput {
 }
 
 type CreateRuleRecord struct {
-	RuleType    string
-	Pattern     string
-	TargetKind  string
+	RuleType     string
+	Pattern      string
+	TargetKind   string
 	ProxyGroupID sql.NullInt64
 }
 
@@ -206,7 +206,7 @@ func (r *Repository) ListForInternalGroup(ctx context.Context, groupID int64) ([
 		 FROM rules r
 		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
 		 WHERE r.proxy_group_id = ?
-		 ORDER BY r.id ASC`, groupID,
+		 ORDER BY r.id DESC`, groupID,
 	)
 	if err != nil {
 		return nil, err
