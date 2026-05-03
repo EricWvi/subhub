@@ -25,22 +25,39 @@ func (r *Repository) ListClashConfigs(ctx context.Context) ([]ClashConfigSubscri
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var subs []ClashConfigSubscription
 	for rows.Next() {
 		var sub ClashConfigSubscription
 		var createdAt, updatedAt string
 		if err := rows.Scan(&sub.ID, &sub.Name, &createdAt, &updatedAt); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		sub.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		sub.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
-		sub.Providers = []int64{}
-		sub.ProxyGroups = []ClashConfigProxyGroup{}
 		subs = append(subs, sub)
 	}
-	return subs, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	for i := range subs {
+		providers, err := r.loadClashConfigProviders(ctx, subs[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		subs[i].Providers = providers
+
+		groups, err := r.loadClashConfigProxyGroups(ctx, subs[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		subs[i].ProxyGroups = groups
+	}
+	return subs, nil
 }
 
 func (r *Repository) ListProxyProviders(ctx context.Context) ([]ProxyProviderSubscription, error) {
@@ -48,21 +65,33 @@ func (r *Repository) ListProxyProviders(ctx context.Context) ([]ProxyProviderSub
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var subs []ProxyProviderSubscription
 	for rows.Next() {
 		var sub ProxyProviderSubscription
 		var createdAt, updatedAt string
 		if err := rows.Scan(&sub.ID, &sub.Name, &sub.InternalProxyGroupID, &createdAt, &updatedAt); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		sub.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		sub.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
-		sub.Providers = []int64{}
 		subs = append(subs, sub)
 	}
-	return subs, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	for i := range subs {
+		providers, err := r.loadSubscriptionProviders(ctx, "proxy_provider_subscription_providers", subs[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		subs[i].Providers = providers
+	}
+	return subs, nil
 }
 
 func (r *Repository) ListRuleProviders(ctx context.Context) ([]RuleProviderSubscription, error) {
@@ -70,21 +99,33 @@ func (r *Repository) ListRuleProviders(ctx context.Context) ([]RuleProviderSubsc
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var subs []RuleProviderSubscription
 	for rows.Next() {
 		var sub RuleProviderSubscription
 		var createdAt, updatedAt string
 		if err := rows.Scan(&sub.ID, &sub.Name, &sub.InternalProxyGroupID, &createdAt, &updatedAt); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		sub.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		sub.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
-		sub.Providers = []int64{}
 		subs = append(subs, sub)
 	}
-	return subs, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	for i := range subs {
+		providers, err := r.loadSubscriptionProviders(ctx, "rule_provider_subscription_providers", subs[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		subs[i].Providers = providers
+	}
+	return subs, nil
 }
 
 func (r *Repository) CreateClashConfig(ctx context.Context, in CreateClashConfigSubscriptionInput) (ClashConfigSubscription, error) {
@@ -243,23 +284,21 @@ func (r *Repository) GetClashConfigByID(ctx context.Context, id int64) (ClashCon
 		sub.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		sub.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 
-		rows, err := tx.QueryContext(ctx,
+		providersRows, err := tx.QueryContext(ctx,
 			`SELECT provider_id FROM clash_config_subscription_providers WHERE subscription_id = ? ORDER BY position`, id,
 		)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
+		for providersRows.Next() {
 			var pid int64
-			if err := rows.Scan(&pid); err != nil {
+			if err := providersRows.Scan(&pid); err != nil {
+				providersRows.Close()
 				return err
 			}
 			sub.Providers = append(sub.Providers, pid)
 		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
+		providersRows.Close()
 		if sub.Providers == nil {
 			sub.Providers = []int64{}
 		}
@@ -270,20 +309,25 @@ func (r *Repository) GetClashConfigByID(ctx context.Context, id int64) (ClashCon
 		if err != nil {
 			return err
 		}
-		defer pgRows.Close()
 
+		var groups []ClashConfigProxyGroup
 		for pgRows.Next() {
 			var g ClashConfigProxyGroup
 			var isSystem int64
 			var bindID sql.NullInt64
 			if err := pgRows.Scan(&g.ID, &g.Name, &g.Type, &g.URL, &g.Interval, &bindID, &isSystem); err != nil {
+				pgRows.Close()
 				return err
 			}
 			g.BindInternalGroupID = bindID.Int64
 			g.IsSystem = isSystem == 1
+			groups = append(groups, g)
+		}
+		pgRows.Close()
 
+		for i := range groups {
 			mRows, err := tx.QueryContext(ctx,
-				`SELECT member_type, member_value FROM clash_config_proxy_group_members WHERE proxy_group_id = ? ORDER BY position`, g.ID,
+				`SELECT member_type, member_value FROM clash_config_proxy_group_members WHERE proxy_group_id = ? ORDER BY position`, groups[i].ID,
 			)
 			if err != nil {
 				return err
@@ -294,25 +338,19 @@ func (r *Repository) GetClashConfigByID(ctx context.Context, id int64) (ClashCon
 					mRows.Close()
 					return err
 				}
-				g.Proxies = append(g.Proxies, m)
+				groups[i].Proxies = append(groups[i].Proxies, m)
 			}
 			mRows.Close()
-			if err := mRows.Err(); err != nil {
-				return err
+			if groups[i].Proxies == nil {
+				groups[i].Proxies = []ProxyMember{}
 			}
-			if g.Proxies == nil {
-				g.Proxies = []ProxyMember{}
-			}
-			sub.ProxyGroups = append(sub.ProxyGroups, g)
 		}
-		if err := pgRows.Err(); err != nil {
-			return err
-		}
+		sub.ProxyGroups = groups
 		if sub.ProxyGroups == nil {
 			sub.ProxyGroups = []ClashConfigProxyGroup{}
 		}
 
-		return nil
+		return tx.Commit()
 	}()
 	if err != nil {
 		return ClashConfigSubscription{}, err
@@ -351,7 +389,6 @@ func (r *Repository) loadClashConfigProxyGroups(ctx context.Context, subID int64
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var groups []ClashConfigProxyGroup
 	for rows.Next() {
@@ -359,22 +396,31 @@ func (r *Repository) loadClashConfigProxyGroups(ctx context.Context, subID int64
 		var isSystem int64
 		var bindID sql.NullInt64
 		if err := rows.Scan(&g.ID, &g.Name, &g.Type, &g.URL, &g.Interval, &bindID, &isSystem); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		g.BindInternalGroupID = bindID.Int64
 		g.IsSystem = isSystem == 1
+		groups = append(groups, g)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
 
-		members, err := r.loadProxyGroupMembers(ctx, g.ID)
+	for i := range groups {
+		members, err := r.loadProxyGroupMembers(ctx, groups[i].ID)
 		if err != nil {
 			return nil, err
 		}
-		g.Proxies = members
-		groups = append(groups, g)
+		groups[i].Proxies = members
 	}
+
 	if groups == nil {
 		groups = []ClashConfigProxyGroup{}
 	}
-	return groups, rows.Err()
+	return groups, nil
 }
 
 func (r *Repository) loadProxyGroupMembers(ctx context.Context, pgID int64) ([]ProxyMember, error) {

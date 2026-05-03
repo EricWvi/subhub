@@ -11,7 +11,10 @@ go vet ./...                     # static analysis
 go build .                       # build the binary
 ```
 
-There is no lint or typecheck command beyond `go vet`.
+- There is no lint or typecheck command beyond `go vet`.
+- Use `setsid` to run backend in the background.
+- `PRAGMA foreign_keys = ON` is executed once during startup, so we have `MaxOpenConns=1`. Do not introduce deadlocks. Always execute simple querys, and handle bussiness logic in memory.
+- If you need to alter db tables, always do it in a new migration sql file.
 
 ## Architecture
 
