@@ -5,19 +5,37 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
 type Client struct {
-	httpClient *http.Client
+	httpClient      *http.Client
+	proxyHttpClient *http.Client
 }
 
 func NewClient(timeout time.Duration) *Client {
-	return &Client{
-		httpClient: &http.Client{Timeout: timeout},
+	c := &Client{
+		httpClient: &http.Client{
+			Timeout: timeout,
+		},
 	}
+
+	if proxy := os.Getenv("FETCH_PROXY"); proxy != "" {
+		if u, err := url.Parse(proxy); err == nil {
+			transport := http.DefaultTransport.(*http.Transport).Clone()
+			transport.Proxy = http.ProxyURL(u)
+			c.proxyHttpClient = &http.Client{
+				Timeout:   timeout,
+				Transport: transport,
+			}
+		}
+	}
+
+	return c
 }
 
 type Response struct {
@@ -26,11 +44,27 @@ type Response struct {
 }
 
 func (c *Client) Fetch(ctx context.Context, url string) (Response, error) {
+	// First attempt without proxy
+	res, err := c.doFetch(ctx, c.httpClient, url)
+	if err == nil {
+		return res, nil
+	}
+
+	// Second attempt with proxy if configured
+	if c.proxyHttpClient != nil {
+		return c.doFetch(ctx, c.proxyHttpClient, url)
+	}
+
+	return Response{}, err
+}
+
+func (c *Client) doFetch(ctx context.Context, httpClient *http.Client, url string) (Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return Response{}, err
 	}
-	resp, err := c.httpClient.Do(req)
+	req.Header.Set("User-Agent", "clash-verge/1.4.11")
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return Response{}, err
 	}
