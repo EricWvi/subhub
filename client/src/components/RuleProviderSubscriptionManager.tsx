@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Typography, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
-import { formatDate24h } from '../utils';
+import { formatDate24h, useMonacoTheme } from '../utils';
 
 const { Title, Text } = Typography;
 
@@ -19,6 +19,7 @@ interface Provider { id: number; name: string; }
 interface InternalGroup { id: number; name: string; }
 
 const RuleProviderSubscriptionManager: React.FC = () => {
+  const monacoTheme = useMonacoTheme();
   const [subscriptions, setSubscriptions] = useState<RuleProviderSubscription[]>([]);
   const [loading, setLoading] = useState(false);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -185,7 +186,7 @@ const RuleProviderSubscriptionManager: React.FC = () => {
               height="100%"
               language="yaml"
               value={previewContent}
-              theme="vs"
+              theme={monacoTheme}
               options={{
                 readOnly: true,
                 minimap: { enabled: false },

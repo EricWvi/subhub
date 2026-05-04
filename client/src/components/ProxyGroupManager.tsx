@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, message, Popconfirm, Typography, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import MonacoEditor from '@monaco-editor/react';
-import { formatDate24h } from '../utils';
+import { formatDate24h, useMonacoTheme } from '../utils';
 
 const { Title } = Typography;
 
@@ -23,13 +23,14 @@ interface ProxyNodeView {
 const MonacoEditorWrapper: React.FC = () => {
   const form = Form.useFormInstance();
   const value = Form.useWatch('script', form) ?? '';
+  const monacoTheme = useMonacoTheme();
 
   return (
     <MonacoEditor
       height="300px"
       language="javascript"
       value={value}
-      theme="vs"
+      theme={monacoTheme}
       onChange={(val) => form.setFieldValue('script', val ?? '')}
       options={{
         minimap: { enabled: false },
@@ -42,6 +43,7 @@ const MonacoEditorWrapper: React.FC = () => {
 };
 
 const ProxyGroupManager: React.FC = () => {
+  const monacoTheme = useMonacoTheme();
   const [groups, setGroups] = useState<ProxyGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -212,7 +214,7 @@ const ProxyGroupManager: React.FC = () => {
                       height="200px"
                       language="javascript"
                       value={record.script}
-                      theme="vs"
+                      theme={monacoTheme}
                       options={{
                         readOnly: true,
                         minimap: { enabled: false },

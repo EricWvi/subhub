@@ -16,10 +16,11 @@ import {
   Tag,
   Collapse,
   Drawer,
+  theme,
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined } from "@ant-design/icons";
 import Editor from "@monaco-editor/react";
-import { formatDate24h } from "../utils";
+import { formatDate24h, useMonacoTheme } from "../utils";
 
 const { Title, Text } = Typography;
 
@@ -131,6 +132,8 @@ const normalizeProxyGroups = (
 };
 
 const ClashConfigSubscriptionManager: React.FC = () => {
+  const { token } = theme.useToken();
+  const monacoTheme = useMonacoTheme();
   const [subscriptions, setSubscriptions] = useState<ClashConfigSubscription[]>(
     [],
   );
@@ -541,7 +544,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                               onConfirm={() => remove(field.name)}
                             >
                               <DeleteOutlined
-                                style={{ color: "#ff4d4f" }}
+                                style={{ color: token.colorError }}
                                 onClick={(e) => e.stopPropagation()}
                               />
                             </Popconfirm>
@@ -816,7 +819,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
               height="100%"
               language="yaml"
               value={previewContent}
-              theme="vs"
+              theme={monacoTheme}
               options={{
                 readOnly: true,
                 minimap: { enabled: false },

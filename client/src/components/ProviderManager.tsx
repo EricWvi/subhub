@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Popconfirm, Tag, Drawer, Typography, Progress, Switch } from 'antd';
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
-import { formatDate24h, formatBytes } from '../utils';
+import { formatDate24h, formatBytes, useMonacoTheme } from '../utils';
 
 const { Title, Text } = Typography;
 
@@ -39,6 +39,7 @@ interface Snapshot {
 }
 
 const ProviderManager: React.FC = () => {
+  const monacoTheme = useMonacoTheme();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(false);
   const [providerNodes, setProviderNodes] = useState<Record<number, ProxyNode[]>>({});
@@ -423,7 +424,7 @@ const ProviderManager: React.FC = () => {
                 height="100%"
                 language="yaml"
                 value={currentSnapshot.normalized_yaml}
-                theme="vs"
+                theme={monacoTheme}
                 options={{
                   readOnly: true,
                   minimap: { enabled: false },
