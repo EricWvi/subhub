@@ -12,6 +12,7 @@ var ErrNotFound = errors.New("rule not found")
 type ListRulesInput struct {
 	Page     int
 	PageSize int
+	Search   string
 }
 
 func normalizeListInput(in ListRulesInput) ListRulesInput {
@@ -101,20 +102,33 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (Rule, error) {
 
 func (r *Repository) List(ctx context.Context, in ListRulesInput) ([]Rule, int, error) {
 	in = normalizeListInput(in)
+
+	var countArgs []any
+	countQuery := `SELECT COUNT(*) FROM rules`
+	if in.Search != "" {
+		countQuery += ` WHERE pattern LIKE ?`
+		countArgs = append(countArgs, "%"+in.Search+"%")
+	}
+
 	var total int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rules`).Scan(&total)
+	err := r.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	offset := (in.Page - 1) * in.PageSize
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT r.id, r.rule_type, r.pattern, r.target_kind, r.proxy_group_id, pg.name, r.created_at, r.updated_at
+	listQuery := `SELECT r.id, r.rule_type, r.pattern, r.target_kind, r.proxy_group_id, pg.name, r.created_at, r.updated_at
 		 FROM rules r
-		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
-		 ORDER BY r.id DESC LIMIT ? OFFSET ?`,
-		in.PageSize, offset,
-	)
+		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id`
+	var listArgs []any
+	if in.Search != "" {
+		listQuery += ` WHERE r.pattern LIKE ?`
+		listArgs = append(listArgs, "%"+in.Search+"%")
+	}
+	listQuery += ` ORDER BY r.id DESC LIMIT ? OFFSET ?`
+	listArgs = append(listArgs, in.PageSize, offset)
+
+	rows, err := r.db.QueryContext(ctx, listQuery, listArgs...)
 	if err != nil {
 		return nil, 0, err
 	}

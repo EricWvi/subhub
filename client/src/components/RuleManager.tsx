@@ -27,12 +27,15 @@ const RuleManager: React.FC = () => {
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [proxyGroupOptions, setProxyGroupOptions] = useState<string[]>(STATIC_PROXY_GROUPS);
   const [customRuleType, setCustomRuleType] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
 
-  const fetchRules = async (nextPage = page, nextPageSize = pageSize) => {
+  const fetchRules = async (nextPage = page, nextPageSize = pageSize, search = searchText) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/rules?page=${nextPage}&page_size=${nextPageSize}`);
+      const params = new URLSearchParams({ page: String(nextPage), page_size: String(nextPageSize) });
+      if (search) params.set('search', search);
+      const response = await fetch(`/api/rules?${params}`);
       const data = await response.json();
       setRules(data.rules || []);
       setPage(data.page || nextPage);
@@ -89,7 +92,7 @@ const RuleManager: React.FC = () => {
         return;
       }
       message.success('Rule deleted');
-      fetchRules(page, pageSize);
+      fetchRules(page, pageSize, searchText);
     } catch (error) {
       message.error('Failed to delete rule');
     }
@@ -116,7 +119,7 @@ const RuleManager: React.FC = () => {
       if (response.ok) {
         message.success(`Rule ${editingRule ? 'updated' : 'added'}`);
         setModalVisible(false);
-        fetchRules(page, pageSize);
+        fetchRules(page, pageSize, searchText);
       } else {
         const errorText = await response.text();
         message.error(`Operation failed: ${errorText}`);
@@ -130,9 +133,17 @@ const RuleManager: React.FC = () => {
     <div>
       <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Title level={2}>Rule Management</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          Add Rule
-        </Button>
+        <Space>
+          <Input.Search
+            placeholder="Search pattern..."
+            allowClear
+            onSearch={(value) => { setSearchText(value); fetchRules(1, pageSize, value); }}
+            style={{ width: 250 }}
+          />
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            Add Rule
+          </Button>
+        </Space>
       </div>
 
       <Table
@@ -161,7 +172,7 @@ const RuleManager: React.FC = () => {
           current: page,
           pageSize,
           total,
-          onChange: (nextPage, nextPageSize) => fetchRules(nextPage, nextPageSize),
+          onChange: (nextPage, nextPageSize) => fetchRules(nextPage, nextPageSize, searchText),
         }}
       />
 

@@ -78,7 +78,8 @@ func (h *Handler) listRules(w http.ResponseWriter, r *http.Request) {
 func parseListRulesInput(r *http.Request) ListRulesInput {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
-	return ListRulesInput{Page: page, PageSize: pageSize}
+	search := r.URL.Query().Get("search")
+	return ListRulesInput{Page: page, PageSize: pageSize, Search: search}
 }
 
 func (h *Handler) createRule(w http.ResponseWriter, r *http.Request) {
