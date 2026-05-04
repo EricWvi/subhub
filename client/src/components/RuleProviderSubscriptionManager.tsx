@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Typography, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined } from '@ant-design/icons';
+import Editor from '@monaco-editor/react';
 import { formatDate24h } from '../utils';
 
 const { Title, Text } = Typography;
@@ -176,18 +177,24 @@ const RuleProviderSubscriptionManager: React.FC = () => {
         onClose={() => setPreviewDrawerVisible(false)}
         open={previewDrawerVisible}
         loading={previewLoading}
+        styles={{ body: { display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 } }}
       >
         {previewContent ? (
-          <pre style={{
-            background: "#f5f5f5",
-            padding: "12px",
-            borderRadius: "4px",
-            maxHeight: "600px",
-            overflow: "auto",
-            fontSize: "12px",
-          }}>
-            {previewContent}
-          </pre>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <Editor
+              height="100%"
+              language="yaml"
+              value={previewContent}
+              theme="vs"
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 14,
+                scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+              }}
+            />
+          </div>
         ) : (
           <div style={{ textAlign: "center", marginTop: "40px" }}>
             <Text type="secondary">No content available.</Text>

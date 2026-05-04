@@ -116,7 +116,7 @@ func (s *Service) ResolveNodesForOutput(ctx context.Context, groupID int64, allo
 	if strings.TrimSpace(g.Script) != "" {
 		var views []ProxyNodeView
 		for _, n := range rawNodes {
-			views = append(views, ProxyNodeView{ID: n.ID, Name: n.Name})
+			views = append(views, ProxyNodeView{ID: n.ID, ProviderName: n.ProviderName, Name: n.Name})
 		}
 		selectedIDs, err := SelectNodeIDs(g.Script, views)
 		if err != nil {

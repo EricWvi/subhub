@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, message, Popconfirm, Typography, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import MonacoEditor from '@monaco-editor/react';
 import { formatDate24h } from '../utils';
 
 const { Title } = Typography;
-const { TextArea } = Input;
 
 interface ProxyGroup {
   id: number;
@@ -19,6 +19,27 @@ interface ProxyNodeView {
   providerName: string;
   name: string;
 }
+
+const MonacoEditorWrapper: React.FC = () => {
+  const form = Form.useFormInstance();
+  const value = Form.useWatch('script', form) ?? '';
+
+  return (
+    <MonacoEditor
+      height="300px"
+      language="javascript"
+      value={value}
+      theme="vs"
+      onChange={(val) => form.setFieldValue('script', val ?? '')}
+      options={{
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        fontSize: 14,
+        scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+      }}
+    />
+  );
+};
 
 const ProxyGroupManager: React.FC = () => {
   const [groups, setGroups] = useState<ProxyGroup[]>([]);
@@ -187,16 +208,19 @@ const ProxyGroupManager: React.FC = () => {
                 {record.script && (
                   <div>
                     <Title level={5}>Script</Title>
-                    <pre style={{ 
-                      background: '#f5f5f5', 
-                      padding: '12px', 
-                      borderRadius: '4px', 
-                      maxHeight: '200px', 
-                      overflow: 'auto',
-                      fontSize: '12px'
-                    }}>
-                      {record.script}
-                    </pre>
+                    <MonacoEditor
+                      height="200px"
+                      language="javascript"
+                      value={record.script}
+                      theme="vs"
+                      options={{
+                        readOnly: true,
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        fontSize: 14,
+                        scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+                      }}
+                    />
                   </div>
                 )}
                 <div>
@@ -244,12 +268,9 @@ const ProxyGroupManager: React.FC = () => {
             name="script"
             label="Script (Optional)"
             tooltip="User script to filter or transform nodes for this group."
+            getValueFromEvent={() => undefined}
           >
-            <TextArea 
-              rows={10} 
-              placeholder="// Example script logic..." 
-              style={{ fontFamily: 'monospace' }}
-            />
+            <MonacoEditorWrapper />
           </Form.Item>
         </Form>
       </Modal>

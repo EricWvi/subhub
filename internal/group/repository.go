@@ -133,7 +133,7 @@ func (r *Repository) ListRawNodesByProviders(ctx context.Context, providerIDs []
 		args[i] = id
 	}
 	query := fmt.Sprintf(
-		`SELECT n.id, n.provider_id, n.name, n.raw_yaml FROM proxy_nodes n WHERE n.enabled = 1 AND n.provider_id IN (%s) ORDER BY n.provider_id, n.id`,
+		`SELECT n.id, n.provider_id, p.name, n.name, n.raw_yaml FROM proxy_nodes n JOIN providers p ON p.id = n.provider_id WHERE n.enabled = 1 AND n.provider_id IN (%s) ORDER BY n.provider_id, n.id`,
 		strings.Join(placeholders, ","),
 	)
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -145,7 +145,7 @@ func (r *Repository) ListRawNodesByProviders(ctx context.Context, providerIDs []
 	var nodes []ResolvedNode
 	for rows.Next() {
 		var n ResolvedNode
-		if err := rows.Scan(&n.ID, &n.ProviderID, &n.Name, &n.RawYAML); err != nil {
+		if err := rows.Scan(&n.ID, &n.ProviderID, &n.ProviderName, &n.Name, &n.RawYAML); err != nil {
 			return nil, err
 		}
 		nodes = append(nodes, n)

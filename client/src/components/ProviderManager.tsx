@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Popconfirm, Tag, Drawer, Typography, Progress, Switch } from 'antd';
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import Editor from '@monaco-editor/react';
 import { formatDate24h, formatBytes } from '../utils';
 
 const { Title, Text } = Typography;
@@ -329,7 +330,7 @@ const ProviderManager: React.FC = () => {
                     title: 'Configuration',
                     key: 'raw',
                     render: (_, node: ProxyNode) => (
-                      <pre style={{ margin: 0, fontSize: '10px', maxHeight: '100px', overflow: 'auto' }}>
+                      <pre style={{ margin: 0, fontSize: '12px', maxHeight: '120px', overflow: 'auto' }}>
                         {node.raw_yaml}
                       </pre>
                     ),
@@ -398,35 +399,40 @@ const ProviderManager: React.FC = () => {
         onClose={() => setSnapshotDrawerVisible(false)}
         open={snapshotDrawerVisible}
         loading={snapshotLoading}
+        styles={{ body: { display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 } }}
       >
         {currentSnapshot ? (
-          <div>
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
-              <div>
-                <Text type="secondary">Fetched At: </Text>
-                <Text strong>{formatDate24h(currentSnapshot.fetched_at)}</Text>
-              </div>
-              <div>
-                <Text type="secondary">Format: </Text>
-                <Tag color="blue">{currentSnapshot.format}</Tag>
-                <Text type="secondary" style={{ marginLeft: '16px' }}>Node Count: </Text>
-                <Text strong>{currentSnapshot.node_count}</Text>
-              </div>
-              
-              <div>
-                <Title level={5}>Normalized YAML</Title>
-                <pre style={{ 
-                  background: '#f5f5f5', 
-                  padding: '12px', 
-                  borderRadius: '4px', 
-                  maxHeight: '600px', 
-                  overflow: 'auto',
-                  fontSize: '12px'
-                }}>
-                  {currentSnapshot.normalized_yaml}
-                </pre>
-              </div>
-            </Space>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <div style={{ marginBottom: 16, flexShrink: 0 }}>
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                <div>
+                  <Text type="secondary">Fetched At: </Text>
+                  <Text strong>{formatDate24h(currentSnapshot.fetched_at)}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">Format: </Text>
+                  <Tag color="blue">{currentSnapshot.format}</Tag>
+                  <Text type="secondary" style={{ marginLeft: '16px' }}>Node Count: </Text>
+                  <Text strong>{currentSnapshot.node_count}</Text>
+                </div>
+              </Space>
+            </div>
+            <Title level={5} style={{ flexShrink: 0 }}>Normalized YAML</Title>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <Editor
+                height="100%"
+                language="yaml"
+                value={currentSnapshot.normalized_yaml}
+                theme="vs"
+                options={{
+                  readOnly: true,
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  fontSize: 14,
+                  scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+                }}
+              />
+            </div>
           </div>
         ) : (
           <div style={{ textAlign: 'center', marginTop: '40px' }}>

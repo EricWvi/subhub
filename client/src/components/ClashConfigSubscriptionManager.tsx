@@ -18,6 +18,7 @@ import {
   Drawer,
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined } from "@ant-design/icons";
+import Editor from "@monaco-editor/react";
 import { formatDate24h } from "../utils";
 
 const { Title, Text } = Typography;
@@ -247,7 +248,12 @@ const ClashConfigSubscriptionManager: React.FC = () => {
       const values = form.getFieldsValue(true);
       const payload = {
         ...values,
-        proxy_groups: normalizeProxyGroups(values.proxy_groups),
+        proxy_groups: normalizeProxyGroups(values.proxy_groups).map((g) => {
+          if (g.type !== "select" && !g.url) {
+            g.url = "https://cp.cloudflare.com/generate_204";
+          }
+          return g;
+        }),
       };
       const url = editingSub
         ? `/api/subscriptions/clash-configs/${editingSub.id}`
@@ -802,18 +808,24 @@ const ClashConfigSubscriptionManager: React.FC = () => {
         onClose={() => setPreviewDrawerVisible(false)}
         open={previewDrawerVisible}
         loading={previewLoading}
+        styles={{ body: { display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 } }}
       >
         {previewContent ? (
-          <pre style={{
-            background: "#f5f5f5",
-            padding: "12px",
-            borderRadius: "4px",
-            maxHeight: "600px",
-            overflow: "auto",
-            fontSize: "12px",
-          }}>
-            {previewContent}
-          </pre>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <Editor
+              height="100%"
+              language="yaml"
+              value={previewContent}
+              theme="vs"
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 14,
+                scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+              }}
+            />
+          </div>
         ) : (
           <div style={{ textAlign: "center", marginTop: "40px" }}>
             <Text type="secondary">No content available.</Text>
