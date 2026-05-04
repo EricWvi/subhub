@@ -27,6 +27,7 @@ func NewService(repo *Repository) *Service {
 }
 
 var ErrNameRequired = errors.New("name is required")
+var ErrDeleteReferenced = errors.New("proxy group is referenced by other resources")
 
 func (s *Service) Create(ctx context.Context, in CreateGroupInput) (ProxyGroup, error) {
 	if strings.TrimSpace(in.Name) == "" {
@@ -57,7 +58,11 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateGroupInput) (Pr
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
+	err := s.repo.Delete(ctx, id)
+	if err != nil {
+		return ErrDeleteReferenced
+	}
+	return nil
 }
 
 func (s *Service) ListNodes(ctx context.Context, groupID int64) ([]ProxyNodeView, error) {

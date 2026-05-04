@@ -103,6 +103,7 @@ func (r *Repository) ListProxyNodeViews(ctx context.Context) ([]ProxyNodeView, e
 		`SELECT n.id, p.name, n.name
 		 FROM proxy_nodes n
 		 JOIN providers p ON p.id = n.provider_id
+		 WHERE n.enabled = 1
 		 ORDER BY p.id, n.id`,
 	)
 	if err != nil {
@@ -132,7 +133,7 @@ func (r *Repository) ListRawNodesByProviders(ctx context.Context, providerIDs []
 		args[i] = id
 	}
 	query := fmt.Sprintf(
-		`SELECT n.id, n.provider_id, n.name, n.raw_yaml FROM proxy_nodes n WHERE n.provider_id IN (%s) ORDER BY n.provider_id, n.id`,
+		`SELECT n.id, n.provider_id, n.name, n.raw_yaml FROM proxy_nodes n WHERE n.enabled = 1 AND n.provider_id IN (%s) ORDER BY n.provider_id, n.id`,
 		strings.Join(placeholders, ","),
 	)
 	rows, err := r.db.QueryContext(ctx, query, args...)

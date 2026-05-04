@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -188,16 +189,21 @@ func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerI
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO proxy_nodes (provider_id, name, raw_yaml, update_mark)
-			 VALUES (?, ?, ?, 0)
-			 ON CONFLICT(provider_id, name) DO UPDATE SET
-			 	raw_yaml = excluded.raw_yaml,
-			 	update_mark = 0`,
-			providerID, name, string(raw),
+		res, err := tx.ExecContext(ctx,
+			`UPDATE proxy_nodes SET raw_yaml = ?, update_mark = 0 WHERE provider_id = ? AND name = ?`,
+			string(raw), providerID, name,
 		)
 		if err != nil {
 			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			_, err = tx.ExecContext(ctx,
+				`INSERT INTO proxy_nodes (provider_id, name, raw_yaml, update_mark) VALUES (?, ?, ?, 0)`,
+				providerID, name, string(raw),
+			)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -221,7 +227,7 @@ func (r *Repository) RecordRefreshFailure(ctx context.Context, providerID int64,
 
 func (r *Repository) ListProxyNodesByProvider(ctx context.Context, providerID int64) ([]ProxyNode, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, provider_id, name, raw_yaml, update_mark
+		`SELECT id, provider_id, name, raw_yaml, update_mark, enabled
 		 FROM proxy_nodes
 		 WHERE provider_id = ?
 		 ORDER BY id`,
@@ -235,9 +241,11 @@ func (r *Repository) ListProxyNodesByProvider(ctx context.Context, providerID in
 	var nodes []ProxyNode
 	for rows.Next() {
 		var n ProxyNode
-		if err := rows.Scan(&n.ID, &n.ProviderID, &n.Name, &n.RawYAML, &n.UpdateMark); err != nil {
+		var enabled int64
+		if err := rows.Scan(&n.ID, &n.ProviderID, &n.Name, &n.RawYAML, &n.UpdateMark, &enabled); err != nil {
 			return nil, err
 		}
+		n.Enabled = enabled == 1
 		nodes = append(nodes, n)
 	}
 	return nodes, rows.Err()
@@ -262,7 +270,7 @@ func (r *Repository) GetLatestSnapshot(ctx context.Context, providerID int64) (S
 
 func (r *Repository) ListLatestNodes(ctx context.Context) ([]map[string]any, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT raw_yaml FROM proxy_nodes ORDER BY provider_id, id`,
+		`SELECT raw_yaml FROM proxy_nodes WHERE enabled = 1 ORDER BY provider_id, id`,
 	)
 	if err != nil {
 		return nil, err
@@ -282,4 +290,60 @@ func (r *Repository) ListLatestNodes(ctx context.Context) ([]map[string]any, err
 		all = append(all, node)
 	}
 	return all, rows.Err()
+}
+
+func (r *Repository) ListLatestNodesByProviders(ctx context.Context, providerIDs []int64) ([]map[string]any, error) {
+	if len(providerIDs) == 0 {
+		return nil, nil
+	}
+
+	placeholders := make([]string, len(providerIDs))
+	args := make([]any, len(providerIDs))
+	for i, id := range providerIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT raw_yaml FROM proxy_nodes WHERE enabled = 1 AND provider_id IN (`+strings.Join(placeholders, ",")+`) ORDER BY provider_id, id`,
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var all []map[string]any
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var node map[string]any
+		if err := yaml.Unmarshal([]byte(raw), &node); err != nil {
+			return nil, err
+		}
+		all = append(all, node)
+	}
+	return all, rows.Err()
+}
+
+func (r *Repository) ToggleNodeEnabled(ctx context.Context, nodeID int64) (bool, error) {
+	var enabled int64
+	err := r.db.QueryRowContext(ctx, `SELECT enabled FROM proxy_nodes WHERE id = ?`, nodeID).Scan(&enabled)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, err
+	}
+	newVal := 1
+	if enabled == 1 {
+		newVal = 0
+	}
+	_, err = r.db.ExecContext(ctx, `UPDATE proxy_nodes SET enabled = ? WHERE id = ?`, newVal, nodeID)
+	if err != nil {
+		return false, err
+	}
+	return newVal == 1, nil
 }

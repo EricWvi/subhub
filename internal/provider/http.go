@@ -68,6 +68,15 @@ func (h *Handler) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 				h.getNodes(w, r, id)
 				return
 			}
+			if len(parts) == 4 && parts[2] == "toggle" && r.Method == http.MethodPost {
+				nodeID, err := strconv.ParseInt(parts[3], 10, 64)
+				if err != nil {
+					http.Error(w, "invalid node id", http.StatusBadRequest)
+					return
+				}
+				h.toggleNode(w, r, id, nodeID)
+				return
+			}
 		}
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -153,7 +162,6 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{"provider": p})
 
-	// Trigger initial fetch
 	if h.refresher != nil {
 		go func() {
 			log.Printf("[BG] Triggering initial fetch for provider %d", p.ID)
@@ -262,4 +270,20 @@ func (h *Handler) getNodes(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"nodes": nodes})
+}
+
+func (h *Handler) toggleNode(w http.ResponseWriter, r *http.Request, providerID, nodeID int64) {
+	log.Printf("[API] POST /providers/%d/nodes/toggle/%d", providerID, nodeID)
+	enabled, err := h.service.ToggleNodeEnabled(r.Context(), nodeID)
+	if err != nil {
+		log.Printf("[API] Toggle node %d failed: %v", nodeID, err)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, "node not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"enabled": enabled})
 }

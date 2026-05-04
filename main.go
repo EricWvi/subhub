@@ -38,10 +38,10 @@ func main() {
 	ruleSvc := rule.NewService(ruleRepo)
 	ruleHandler := rule.NewHandler(ruleSvc)
 
-	outputHandler := output.NewHandler(repo, ruleRepo, "tests/fixtures/template.yaml")
+	outputHandler := output.NewHandler(repo, ruleRepo, "data/template.yaml")
 
 	subscriptionRepo := subscription.NewRepository(db)
-	subscriptionSvc := subscription.NewService(subscriptionRepo, repo, groupSvc, ruleRepo, "tests/fixtures/client_sub.yaml")
+	subscriptionSvc := subscription.NewService(subscriptionRepo, repo, groupSvc, ruleRepo, "data/client_sub.yaml")
 	subscriptionHandler := subscription.NewHandler(subscriptionSvc)
 
 	svc.SetSubscriptionReferenceChecker(subscriptionSvc.ProviderReferencedByAnySubscription)

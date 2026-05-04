@@ -2,6 +2,7 @@ package render
 
 import (
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -84,7 +85,12 @@ func RenderProxyProviderSubscription(nodes []map[string]any) (string, error) {
 func RenderRuleProviderSubscription(rules []string) (string, error) {
 	payload := make([]any, 0, len(rules))
 	for _, rule := range rules {
-		payload = append(payload, rule)
+		parts := strings.SplitN(rule, ",", 3)
+		if len(parts) >= 2 {
+			payload = append(payload, parts[0]+","+parts[1])
+		} else {
+			payload = append(payload, rule)
+		}
 	}
 	out, err := yaml.Marshal(map[string]any{"payload": payload})
 	if err != nil {

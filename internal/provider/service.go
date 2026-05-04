@@ -145,3 +145,7 @@ func (s *Service) GetLatestSnapshot(ctx context.Context, id int64) (Snapshot, er
 func (s *Service) ListNodes(ctx context.Context, providerID int64) ([]ProxyNode, error) {
 	return s.repo.ListProxyNodesByProvider(ctx, providerID)
 }
+
+func (s *Service) ToggleNodeEnabled(ctx context.Context, nodeID int64) (bool, error) {
+	return s.repo.ToggleNodeEnabled(ctx, nodeID)
+}

@@ -15,8 +15,9 @@ import {
   Descriptions,
   Tag,
   Collapse,
+  Drawer,
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined } from "@ant-design/icons";
 import { formatDate24h } from "../utils";
 
 const { Title, Text } = Typography;
@@ -143,6 +144,9 @@ const ClashConfigSubscriptionManager: React.FC = () => {
     "0",
   ]);
   const [form] = Form.useForm();
+  const [previewDrawerVisible, setPreviewDrawerVisible] = useState(false);
+  const [previewContent, setPreviewContent] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchSubscriptions = async () => {
     setLoading(true);
@@ -222,11 +226,16 @@ const ClashConfigSubscriptionManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      await fetch(`/api/subscriptions/clash-configs/${id}`, {
+      const response = await fetch(`/api/subscriptions/clash-configs/${id}`, {
         method: "DELETE",
       });
-      message.success("Subscription deleted");
-      fetchSubscriptions();
+      if (response.ok) {
+        message.success("Subscription deleted");
+        fetchSubscriptions();
+      } else {
+        const errorText = await response.text();
+        message.error(`Failed to delete: ${errorText}`);
+      }
     } catch (error) {
       message.error("Failed to delete subscription");
     }
@@ -234,7 +243,8 @@ const ClashConfigSubscriptionManager: React.FC = () => {
 
   const handleModalOk = async () => {
     try {
-      const values = await form.validateFields();
+      await form.validateFields();
+      const values = form.getFieldsValue(true);
       const payload = {
         ...values,
         proxy_groups: normalizeProxyGroups(values.proxy_groups),
@@ -267,6 +277,26 @@ const ClashConfigSubscriptionManager: React.FC = () => {
     const url = `${window.location.protocol}//${window.location.host}/api/subscriptions/clash-configs/${id}/content`;
     navigator.clipboard.writeText(url);
     message.success("Subscription URL copied to clipboard");
+  };
+
+  const handlePreview = async (id: number) => {
+    setPreviewLoading(true);
+    setPreviewDrawerVisible(true);
+    try {
+      const response = await fetch(`/api/subscriptions/clash-configs/${id}/content`);
+      if (response.ok) {
+        const text = await response.text();
+        setPreviewContent(text);
+      } else {
+        setPreviewContent("");
+        message.error("Failed to fetch content");
+      }
+    } catch {
+      setPreviewContent("");
+      message.error("Failed to fetch content");
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const providerMap = Object.fromEntries(providers.map((p) => [p.id, p.name]));
@@ -322,6 +352,11 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                   icon={<CopyOutlined />}
                   onClick={() => handleCopy(record.id)}
                   title="Copy Subscription URL"
+                />
+                <Button
+                  icon={<EyeOutlined />}
+                  onClick={() => handlePreview(record.id)}
+                  title="Preview"
                 />
                 <Button
                   icon={<EditOutlined />}
@@ -468,6 +503,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                     return (
                       <Collapse.Panel
                         key={String(field.name)}
+                        forceRender
                         header={
                           <Form.Item
                             noStyle
@@ -574,17 +610,42 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                         </Form.Item>
 
                         <Form.Item
-                          name={[field.name, "bind_internal_proxy_group_id"]}
-                          label="Rules Bound Group"
+                          noStyle
+                          shouldUpdate={(prev, curr) =>
+                            JSON.stringify(
+                              (prev.proxy_groups || []).map(
+                                (g: ProxyGroupFormValue) => g.bind_internal_proxy_group_id,
+                              ),
+                            ) !==
+                            JSON.stringify(
+                              (curr.proxy_groups || []).map(
+                                (g: ProxyGroupFormValue) => g.bind_internal_proxy_group_id,
+                              ),
+                            )
+                          }
                         >
-                          <Select
-                            allowClear
-                            placeholder="Select internal group"
-                            options={internalGroups.map((g) => ({
-                              label: g.name,
-                              value: g.id,
-                            }))}
-                          />
+                          {() => {
+                            const allGroups: ProxyGroupFormValue[] =
+                              form.getFieldValue("proxy_groups") || [];
+                            const usedIds = allGroups
+                              .filter((_: any, i: number) => i !== field.name)
+                              .map((g: ProxyGroupFormValue) => g.bind_internal_proxy_group_id)
+                              .filter(Boolean);
+                            return (
+                              <Form.Item
+                                name={[field.name, "bind_internal_proxy_group_id"]}
+                                label="Rules Bound Group"
+                              >
+                                <Select
+                                  allowClear
+                                  placeholder="Select internal group"
+                                  options={internalGroups
+                                    .filter((g) => !usedIds.includes(g.id))
+                                    .map((g) => ({ label: g.name, value: g.id }))}
+                                />
+                              </Form.Item>
+                            );
+                          }}
                         </Form.Item>
                         <Form.List name={[field.name, "proxies"]}>
                           {(
@@ -674,6 +735,31 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                                           </Form.Item>
                                         );
                                       }
+                                      if (type === "reference") {
+                                        const allGroups: ProxyGroupFormValue[] =
+                                          form.getFieldValue("proxy_groups") || [];
+                                        const currentName = form.getFieldValue([
+                                          "proxy_groups",
+                                          field.name,
+                                          "name",
+                                        ]);
+                                        return (
+                                          <Form.Item
+                                            name={[mf.name, "value"]}
+                                            noStyle
+                                            rules={[{ required: true }]}
+                                          >
+                                            <Select
+                                              placeholder="Select Proxy Group"
+                                              style={{ width: 200 }}
+                                              options={allGroups
+                                                .map((g) => g.name)
+                                                .filter((n) => n && n !== currentName)
+                                                .map((name) => ({ label: name, value: name }))}
+                                            />
+                                          </Form.Item>
+                                        );
+                                      }
                                       return (
                                         <Form.Item
                                           name={[mf.name, "value"]}
@@ -708,6 +794,32 @@ const ClashConfigSubscriptionManager: React.FC = () => {
           </Form.List>
         </Form>
       </Modal>
+
+      <Drawer
+        title="Content Preview"
+        placement="right"
+        width={800}
+        onClose={() => setPreviewDrawerVisible(false)}
+        open={previewDrawerVisible}
+        loading={previewLoading}
+      >
+        {previewContent ? (
+          <pre style={{
+            background: "#f5f5f5",
+            padding: "12px",
+            borderRadius: "4px",
+            maxHeight: "600px",
+            overflow: "auto",
+            fontSize: "12px",
+          }}>
+            {previewContent}
+          </pre>
+        ) : (
+          <div style={{ textAlign: "center", marginTop: "40px" }}>
+            <Text type="secondary">No content available.</Text>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };

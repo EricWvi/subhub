@@ -78,9 +78,14 @@ const ProxyGroupManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      await fetch(`/api/proxy-groups/${id}`, { method: 'DELETE' });
-      message.success('Proxy group deleted');
-      fetchGroups();
+      const response = await fetch(`/api/proxy-groups/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        message.success('Proxy group deleted');
+        fetchGroups();
+      } else {
+        const errorText = await response.text();
+        message.error(`Failed to delete: ${errorText}`);
+      }
     } catch (error) {
       message.error('Failed to delete proxy group');
     }

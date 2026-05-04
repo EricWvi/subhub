@@ -149,7 +149,11 @@ func (h *Handler) deleteGroup(w http.ResponseWriter, r *http.Request, id int64) 
 	err := h.service.Delete(r.Context(), id)
 	if err != nil {
 		log.Printf("[API] Delete proxy group %d failed: %v", id, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, ErrDeleteReferenced) {
+			http.Error(w, err.Error(), http.StatusConflict)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 	log.Printf("[API] Deleted proxy group %d", id)

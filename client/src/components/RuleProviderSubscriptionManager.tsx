@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Typography } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Typography, Drawer } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined } from '@ant-design/icons';
 import { formatDate24h } from '../utils';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 interface RuleProviderSubscription {
   id: number;
@@ -25,6 +25,9 @@ const RuleProviderSubscriptionManager: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingSub, setEditingSub] = useState<RuleProviderSubscription | null>(null);
   const [form] = Form.useForm();
+  const [previewDrawerVisible, setPreviewDrawerVisible] = useState(false);
+  const [previewContent, setPreviewContent] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -63,9 +66,14 @@ const RuleProviderSubscriptionManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      await fetch(`/api/subscriptions/rule-providers/${id}`, { method: 'DELETE' });
-      message.success('Subscription deleted');
-      fetchData();
+      const response = await fetch(`/api/subscriptions/rule-providers/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        message.success('Subscription deleted');
+        fetchData();
+      } else {
+        const errorText = await response.text();
+        message.error(`Failed to delete: ${errorText}`);
+      }
     } catch (error) {
       message.error('Failed to delete subscription');
     }
@@ -97,6 +105,26 @@ const RuleProviderSubscriptionManager: React.FC = () => {
     message.success('Subscription URL copied to clipboard');
   };
 
+  const handlePreview = async (id: number) => {
+    setPreviewLoading(true);
+    setPreviewDrawerVisible(true);
+    try {
+      const response = await fetch(`/api/subscriptions/rule-providers/${id}/content`);
+      if (response.ok) {
+        const text = await response.text();
+        setPreviewContent(text);
+      } else {
+        setPreviewContent("");
+        message.error("Failed to fetch content");
+      }
+    } catch {
+      setPreviewContent("");
+      message.error("Failed to fetch content");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const providerMap = Object.fromEntries(providers.map(p => [p.id, p.name]));
   const groupMap = Object.fromEntries(internalGroups.map(g => [g.id, g.name]));
 
@@ -118,6 +146,7 @@ const RuleProviderSubscriptionManager: React.FC = () => {
             render: (_: any, r: RuleProviderSubscription) => (
               <Space>
                 <Button icon={<CopyOutlined />} onClick={() => handleCopy(r.id)} title="Copy Link" />
+                <Button icon={<EyeOutlined />} onClick={() => handlePreview(r.id)} title="Preview" />
                 <Button icon={<EditOutlined />} onClick={() => handleEdit(r)} />
                 <Popconfirm title="Sure to delete?" onConfirm={() => handleDelete(r.id)}>
                   <Button danger icon={<DeleteOutlined />} />
@@ -140,6 +169,31 @@ const RuleProviderSubscriptionManager: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+      <Drawer
+        title="Content Preview"
+        placement="right"
+        width={800}
+        onClose={() => setPreviewDrawerVisible(false)}
+        open={previewDrawerVisible}
+        loading={previewLoading}
+      >
+        {previewContent ? (
+          <pre style={{
+            background: "#f5f5f5",
+            padding: "12px",
+            borderRadius: "4px",
+            maxHeight: "600px",
+            overflow: "auto",
+            fontSize: "12px",
+          }}>
+            {previewContent}
+          </pre>
+        ) : (
+          <div style={{ textAlign: "center", marginTop: "40px" }}>
+            <Text type="secondary">No content available.</Text>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };

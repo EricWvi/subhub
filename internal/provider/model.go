@@ -23,6 +23,7 @@ type ProxyNode struct {
 	Name       string `json:"name"`
 	RawYAML    string `json:"raw_yaml"`
 	UpdateMark int64  `json:"update_mark"`
+	Enabled    bool   `json:"enabled"`
 }
 
 type Snapshot struct {

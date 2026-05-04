@@ -94,8 +94,8 @@ func TestRenderRuleProviderSubscription(t *testing.T) {
 	out, err := render.RenderRuleProviderSubscription(rules)
 	require.NoError(t, err)
 	assert.Contains(t, out, "payload:")
-	assert.Contains(t, out, "DOMAIN-SUFFIX,google.com,PROXY")
-	assert.Contains(t, out, "DOMAIN-KEYWORD,netflix,REJECT")
+	assert.Contains(t, out, "DOMAIN-SUFFIX,google.com")
+	assert.Contains(t, out, "DOMAIN-KEYWORD,netflix")
 }
 
 func TestRenderRuleProviderSubscriptionEmpty(t *testing.T) {

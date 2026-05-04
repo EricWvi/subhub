@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Popconfirm, Tag, Drawer, Typography, Progress } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Popconfirm, Tag, Drawer, Typography, Progress, Switch } from 'antd';
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { formatDate24h, formatBytes } from '../utils';
 
@@ -25,6 +25,7 @@ interface ProxyNode {
   provider_id: number;
   name: string;
   raw_yaml: string;
+  enabled: boolean;
 }
 
 interface Snapshot {
@@ -97,9 +98,14 @@ const ProviderManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      await fetch(`/api/providers/${id}`, { method: 'DELETE' });
-      message.success('Provider deleted');
-      fetchProviders();
+      const response = await fetch(`/api/providers/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        message.success('Provider deleted');
+        fetchProviders();
+      } else {
+        const errorText = await response.text();
+        message.error(`Failed to delete: ${errorText}`);
+      }
     } catch (error) {
       message.error('Failed to delete provider');
     }
@@ -145,6 +151,27 @@ const ProviderManager: React.FC = () => {
       message.error('Failed to fetch snapshot');
     } finally {
       setSnapshotLoading(false);
+    }
+  };
+
+  const handleToggleNode = async (providerId: number, nodeId: number) => {
+    try {
+      const response = await fetch(`/api/providers/${providerId}/nodes/toggle/${nodeId}`, { method: 'POST' });
+      if (response.ok) {
+        const data = await response.json();
+        setProviderNodes(prev => {
+          const nodes = prev[providerId];
+          if (!nodes) return prev;
+          return {
+            ...prev,
+            [providerId]: nodes.map(n => n.id === nodeId ? { ...n, enabled: data.enabled } : n),
+          };
+        });
+      } else {
+        message.error('Failed to toggle node');
+      }
+    } catch {
+      message.error('Failed to toggle node');
     }
   };
 
@@ -286,14 +313,26 @@ const ProviderManager: React.FC = () => {
                 size="small"
                 columns={[
                   { title: 'Node Name', dataIndex: 'name', key: 'name' },
-                  { 
-                    title: 'Configuration', 
-                    key: 'raw', 
-                    render: (_, node) => (
+                  {
+                    title: 'Enabled',
+                    key: 'enabled',
+                    width: 80,
+                    render: (_, node: ProxyNode) => (
+                      <Switch
+                        size="small"
+                        checked={node.enabled}
+                        onChange={() => handleToggleNode(record.id, node.id)}
+                      />
+                    ),
+                  },
+                  {
+                    title: 'Configuration',
+                    key: 'raw',
+                    render: (_, node: ProxyNode) => (
                       <pre style={{ margin: 0, fontSize: '10px', maxHeight: '100px', overflow: 'auto' }}>
                         {node.raw_yaml}
                       </pre>
-                    ) 
+                    ),
                   },
                 ]}
                 dataSource={providerNodes[record.id] || []}

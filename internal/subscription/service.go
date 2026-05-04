@@ -203,22 +203,17 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 		allowedProviderIDs = append(allowedProviderIDs, p.ID)
 	}
 
-	var allNodes []map[string]any
-	seen := map[string]bool{}
-	for _, pg := range sub.ProxyGroups {
-		if pg.BindInternalGroupID != 0 {
-			_, nodes, err := s.groupSvc.ResolveNodesForOutput(ctx, pg.BindInternalGroupID, allowedProviderIDs)
-			if err != nil {
-				continue
-			}
-			for _, n := range nodes {
-				name, _ := n["name"].(string)
-				if !seen[name] {
-					seen[name] = true
-					allNodes = append(allNodes, n)
-				}
-			}
+	providerNodes, err := s.providerRepo.ListLatestNodesByProviders(ctx, allowedProviderIDs)
+	if err != nil {
+		return RenderedContent{}, err
+	}
+	nodesByName := map[string]map[string]any{}
+	for _, node := range providerNodes {
+		name, _ := node["name"].(string)
+		if name == "" {
+			continue
 		}
+		nodesByName[name] = node
 	}
 
 	bindMap := map[int64]string{}
@@ -228,6 +223,8 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 		}
 	}
 
+	var allNodes []map[string]any
+	seenNodes := map[string]bool{}
 	var renderedGroups []render.RenderedProxyGroup
 	for _, pg := range sub.ProxyGroups {
 		rp := render.RenderedProxyGroup{
@@ -243,13 +240,29 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 				if err != nil {
 					continue
 				}
-				names, _, err := s.groupSvc.ResolveNodesForOutput(ctx, groupID, allowedProviderIDs)
+				names, nodes, err := s.groupSvc.ResolveNodesForOutput(ctx, groupID, allowedProviderIDs)
 				if err != nil {
 					continue
 				}
 				rp.Proxies = append(rp.Proxies, names...)
+				for _, node := range nodes {
+					name, _ := node["name"].(string)
+					if name == "" || seenNodes[name] {
+						continue
+					}
+					seenNodes[name] = true
+					allNodes = append(allNodes, node)
+				}
+			case "reference", "DIRECT", "REJECT":
+				rp.Proxies = append(rp.Proxies, m.Value)
 			default:
 				rp.Proxies = append(rp.Proxies, m.Value)
+				node, ok := nodesByName[m.Value]
+				if !ok || seenNodes[m.Value] {
+					continue
+				}
+				seenNodes[m.Value] = true
+				allNodes = append(allNodes, node)
 			}
 		}
 		renderedGroups = append(renderedGroups, rp)
@@ -265,13 +278,11 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 		r := ruleRows[i]
 		var target string
 		if r.TargetKind == "PROXY_GROUP" && r.ProxyGroupID.Valid {
-			if name, ok := bindMap[r.ProxyGroupID.Int64]; ok {
-				target = name
-			} else if r.ProxyGroupName.Valid {
-				target = r.ProxyGroupName.String
-			} else {
+			name, ok := bindMap[r.ProxyGroupID.Int64]
+			if !ok || name == "" {
 				continue
 			}
+			target = name
 		} else {
 			target = r.TargetKind
 		}

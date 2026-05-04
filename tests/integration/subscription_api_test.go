@@ -523,3 +523,72 @@ func TestUpdateClashConfigSubscriptionReordersNonReservedProxyGroupsWithoutMovin
 	assert.NotContains(t, body, `"position":42`)
 	assert.NotContains(t, body, `"position":7`)
 }
+
+func TestUpdateClashConfigSubscriptionKeepsReferencedGroupWhenReferenceIsRemoved(t *testing.T) {
+	ts := newTestServerWithSubscriptions(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, `{"name":"alpha","url":"https://example.com/a"}`)
+	proxiesGroupID := createProxyGroup(t, ts.URL, `{"name":"Default","script":""}`)
+	hkGroupID := createProxyGroup(t, ts.URL, `{"name":"HKNodes","script":""}`)
+
+	createResp := postJSON(t, ts.URL+"/api/subscriptions/clash-configs", fmt.Sprintf(`{
+		"name":"Daily",
+		"providers":[%d],
+		"proxy_groups":[
+			{
+				"name":"Proxies",
+				"type":"select",
+				"position":0,
+				"proxies":[{"type":"reference","value":"HK"},{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
+				"name":"HK",
+				"type":"select",
+				"position":1,
+				"proxies":[{"type":"internal","value":"%d"}],
+				"bind_internal_proxy_group_id":%d
+			}
+		]
+	}`, providerID, proxiesGroupID, hkGroupID, hkGroupID))
+	defer createResp.Body.Close()
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
+
+	updateResp := putJSON(t, ts.URL+"/api/subscriptions/clash-configs/1", fmt.Sprintf(`{
+		"name":"Daily",
+		"providers":[%d],
+		"proxy_groups":[
+			{
+				"name":"Proxies",
+				"type":"select",
+				"position":0,
+				"proxies":[{"type":"DIRECT","value":"DIRECT"}],
+				"bind_internal_proxy_group_id":%d
+			},
+			{
+				"name":"HK",
+				"type":"select",
+				"position":1,
+				"proxies":[{"type":"internal","value":"%d"}],
+				"bind_internal_proxy_group_id":%d
+			}
+		]
+	}`, providerID, proxiesGroupID, hkGroupID, hkGroupID))
+	defer updateResp.Body.Close()
+	require.Equal(t, http.StatusOK, updateResp.StatusCode)
+
+	body := readBody(t, updateResp)
+	assert.Contains(t, body, `"name":"HK"`)
+	assert.Contains(t, body, `"type":"internal","value":"`+fmt.Sprintf("%d", hkGroupID)+`"`)
+	assert.NotContains(t, body, `"type":"reference","value":"HK"`)
+
+	getResp, err := http.Get(ts.URL + "/api/subscriptions/clash-configs/1")
+	require.NoError(t, err)
+	defer getResp.Body.Close()
+	require.Equal(t, http.StatusOK, getResp.StatusCode)
+
+	getBody := readBody(t, getResp)
+	assert.Contains(t, getBody, `"name":"HK"`)
+	assert.Contains(t, getBody, `"type":"internal","value":"`+fmt.Sprintf("%d", hkGroupID)+`"`)
+}
