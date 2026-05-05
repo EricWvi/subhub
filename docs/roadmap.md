@@ -37,9 +37,9 @@ _Focus: Pattern matching and group automation._
 
 _Focus: Provide subscription endpoints for multiple Mihomo-compatible outputs._
 
-- [ ] **Clash Config Subscription:** Serve a full Clash/Mihomo configuration subscription for direct client use.
-- [ ] **Proxy Provider Subscription:** Expose a proxy provider subscription that publishes node lists in Mihomo-native format.
-- [ ] **Rule Provider Subscription:** Expose a rule provider subscription that publishes reusable rule sets for downstream configs.
+- [x] **Clash Config Subscription:** Serve a full Clash/Mihomo configuration subscription for direct client use.
+- [x] **Proxy Provider Subscription:** Expose a proxy provider subscription that publishes node lists in Mihomo-native format.
+- [x] **Rule Provider Subscription:** Expose a rule provider subscription that publishes reusable rule sets for downstream configs.
 
 ### Phase 5: Performance & Analytics (The Backend)
 
@@ -59,14 +59,6 @@ _Focus: Bring health data and scoring into the frontend early._
 - [ ] **Score Viewer:** Expose the scoring model and ranked nodes before the full automation layer ships.
 - [ ] **Selection Controls:** Let users preview or override which nodes are treated as "dead" or "high-score".
 
-### Phase 6: UI Consolidation (The Interface)
-
-_Focus: Compose the earlier frontend modules into one coherent dashboard shell._
-
-- [ ] **App Shell:** Build the React+Vite layout, navigation, and shared state container.
-- [ ] **Module Integration:** Wire the Provider, Group/Rule, and Health/Score panels into the dashboard without adding new domain logic.
-- [ ] **Endpoint Generator:** Provide a simple interface to copy the final SubHub subscription URL.
-
 ---
 
 ### Phase 7: Release Hardening & Deployment
@@ -74,7 +66,7 @@ _Focus: Compose the earlier frontend modules into one coherent dashboard shell._
 _Focus: Secure the product and package it for rollout._
 
 - [ ] **Auth Layer:** Secure the Web UI and subscription endpoints (API Keys/JWT).
-- [ ] **Deployment Packaging:** Containerize the backend, frontend, and database for easy "One-Click" deployment.
+- [x] **Deployment Packaging:** Containerize the backend, frontend, and database for easy "One-Click" deployment.
 
 ### Phase 8: Ingress & Egress Analysis
 
