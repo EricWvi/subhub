@@ -7,7 +7,7 @@ import {
   Form,
   Input,
   Select,
-  message,
+  App,
   Popconfirm,
   Typography,
   Tooltip,
@@ -51,6 +51,7 @@ const IMPORT_HELP = (
 );
 
 const RuleManager: React.FC = () => {
+  const { message } = App.useApp();
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -114,20 +115,12 @@ const RuleManager: React.FC = () => {
   const handleAdd = () => {
     setEditingRule(null);
     setCustomRuleType(false);
-    form.resetFields();
     setModalVisible(true);
   };
 
   const handleEdit = (record: Rule) => {
     setEditingRule(record);
-    const isCustom = !BUILT_IN_RULE_TYPES.includes(record.rule_type);
-    setCustomRuleType(isCustom);
-    form.setFieldsValue({
-      rule_type_selector: isCustom ? "__custom__" : record.rule_type,
-      rule_type: isCustom ? record.rule_type : record.rule_type,
-      pattern: record.pattern,
-      proxy_group: record.proxy_group,
-    });
+    setCustomRuleType(!BUILT_IN_RULE_TYPES.includes(record.rule_type));
     setModalVisible(true);
   };
 
@@ -290,13 +283,26 @@ const RuleManager: React.FC = () => {
       />
 
       <Modal
+        key={editingRule ? `edit-${editingRule.id}` : "add"}
         title={editingRule ? "Edit Rule" : "Add Rule"}
         open={modalVisible}
         onOk={handleModalOk}
         onCancel={() => setModalVisible(false)}
-        destroyOnClose
       >
-        <Form form={form} layout="vertical">
+        <Form 
+          form={form} 
+          layout="vertical" 
+          preserve={false}
+          initialValues={editingRule ? {
+            rule_type_selector: !BUILT_IN_RULE_TYPES.includes(editingRule.rule_type) ? "__custom__" : editingRule.rule_type,
+            rule_type: editingRule.rule_type,
+            pattern: editingRule.pattern,
+            proxy_group: editingRule.proxy_group,
+          } : {
+            rule_type_selector: "DOMAIN-SUFFIX",
+            proxy_group: "DIRECT",
+          }}
+        >
           <Form.Item
             name="rule_type_selector"
             label="Rule Type"
@@ -363,7 +369,7 @@ const RuleManager: React.FC = () => {
         confirmLoading={importing}
         okText="Import"
         width={640}
-        destroyOnClose
+        
       >
         <div
           style={{

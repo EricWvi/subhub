@@ -29,13 +29,6 @@ export const useMonacoTheme = () => {
 
   const monacoTheme = getThemeMode(token.colorBgBase);
 
-  console.log(
-    "Current Background:",
-    token.colorBgBase,
-    "Monaco Theme:",
-    monacoTheme,
-  );
-
   return monacoTheme;
 };
 

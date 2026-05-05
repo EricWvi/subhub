@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Popconfirm, Tag, Drawer, Typography, Progress, Switch } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, InputNumber, App, Popconfirm, Tag, Drawer, Typography, Progress, Switch } from 'antd';
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { formatDate24h, formatBytes, useMonacoTheme } from '../utils';
@@ -39,6 +39,7 @@ interface Snapshot {
 }
 
 const ProviderManager: React.FC = () => {
+  const { message } = App.useApp();
   const monacoTheme = useMonacoTheme();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(false);
@@ -88,13 +89,11 @@ const ProviderManager: React.FC = () => {
 
   const handleAdd = () => {
     setEditingProvider(null);
-    form.resetFields();
     setModalVisible(true);
   };
 
   const handleEdit = (record: Provider) => {
     setEditingProvider(record);
-    form.setFieldsValue(record);
     setModalVisible(true);
   };
 
@@ -352,14 +351,14 @@ const ProviderManager: React.FC = () => {
         }}
       />
 
-      <Modal
+      <Modal key={editingProvider?.id || "add"}
         title={editingProvider ? 'Edit Provider' : 'Add Provider'}
         open={modalVisible}
         onOk={handleModalOk}
         onCancel={() => setModalVisible(false)}
-        destroyOnClose
+        
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" preserve={false} initialValues={editingProvider || { refresh_interval_minutes: 120 }}>
           <Form.Item
             name="name"
             label="Name"
@@ -385,7 +384,7 @@ const ProviderManager: React.FC = () => {
           <Form.Item
             name="refresh_interval_minutes"
             label="Refresh Interval (minutes)"
-            initialValue={120}
+            
             rules={[{ required: true, message: 'Please input refresh interval!' }]}
           >
             <InputNumber min={5} style={{ width: '100%' }} />
@@ -396,7 +395,7 @@ const ProviderManager: React.FC = () => {
       <Drawer
         title="Provider Snapshot"
         placement="right"
-        width={800}
+        size="large"
         onClose={() => setSnapshotDrawerVisible(false)}
         open={snapshotDrawerVisible}
         loading={snapshotLoading}
@@ -405,7 +404,7 @@ const ProviderManager: React.FC = () => {
         {currentSnapshot ? (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <div style={{ marginBottom: 16, flexShrink: 0 }}>
-              <Space direction="vertical" style={{ width: '100%' }} size="small">
+              <Space orientation="vertical" style={{ width: '100%' }} size="small">
                 <div>
                   <Text type="secondary">Fetched At: </Text>
                   <Text strong>{formatDate24h(currentSnapshot.fetched_at)}</Text>

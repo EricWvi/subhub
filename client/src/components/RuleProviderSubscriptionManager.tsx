@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, message, Popconfirm, Typography, Drawer } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Select, App, Popconfirm, Typography, Drawer } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { formatDate24h, useMonacoTheme } from '../utils';
@@ -19,6 +19,7 @@ interface Provider { id: number; name: string; }
 interface InternalGroup { id: number; name: string; }
 
 const RuleProviderSubscriptionManager: React.FC = () => {
+  const { message } = App.useApp();
   const monacoTheme = useMonacoTheme();
   const [subscriptions, setSubscriptions] = useState<RuleProviderSubscription[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,13 +57,11 @@ const RuleProviderSubscriptionManager: React.FC = () => {
 
   const handleAdd = () => {
     setEditingSub(null);
-    form.resetFields();
     setModalVisible(true);
   };
 
   const handleEdit = (record: RuleProviderSubscription) => {
     setEditingSub(record);
-    form.setFieldsValue(record);
     setModalVisible(true);
   };
 
@@ -158,8 +157,8 @@ const RuleProviderSubscriptionManager: React.FC = () => {
           },
         ]}
       />
-      <Modal title={editingSub ? 'Edit' : 'Add'} open={modalVisible} onOk={handleModalOk} onCancel={() => setModalVisible(false)} destroyOnClose>
-        <Form form={form} layout="vertical">
+      <Modal key={editingSub?.id || "add"} title={editingSub ? 'Edit' : 'Add'} open={modalVisible} onOk={handleModalOk} onCancel={() => setModalVisible(false)} >
+        <Form form={form} layout="vertical" preserve={false} initialValues={editingSub || {}}>
           <Form.Item name="name" label="Name" rules={[{ required: true }]}>
             <Input placeholder="Rules Export" />
           </Form.Item>
@@ -174,7 +173,7 @@ const RuleProviderSubscriptionManager: React.FC = () => {
       <Drawer
         title="Content Preview"
         placement="right"
-        width={800}
+        size="large"
         onClose={() => setPreviewDrawerVisible(false)}
         open={previewDrawerVisible}
         loading={previewLoading}

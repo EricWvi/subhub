@@ -8,7 +8,7 @@ import {
   Input,
   Select,
   InputNumber,
-  message,
+  App,
   Popconfirm,
   Typography,
   Card,
@@ -132,6 +132,7 @@ const normalizeProxyGroups = (
 };
 
 const ClashConfigSubscriptionManager: React.FC = () => {
+  const { message } = App.useApp();
   const { token } = theme.useToken();
   const monacoTheme = useMonacoTheme();
   const [subscriptions, setSubscriptions] = useState<ClashConfigSubscription[]>(
@@ -195,14 +196,16 @@ const ClashConfigSubscriptionManager: React.FC = () => {
 
   const handleAdd = () => {
     setEditingSub(null);
-    form.resetFields();
-    form.setFieldsValue({
-      name: "",
-      providers: [],
-      proxy_groups: [createReservedProxyGroup()],
-    });
-    setActiveProxyGroupKey(["0"]);
     setModalVisible(true);
+    setActiveProxyGroupKey(["0"]);
+    setTimeout(() => {
+      form.resetFields();
+      form.setFieldsValue({
+        name: "",
+        providers: [],
+        proxy_groups: [createReservedProxyGroup()],
+      });
+    }, 0);
   };
 
   const handleEdit = (record: ClashConfigSubscription) => {
@@ -219,13 +222,15 @@ const ClashConfigSubscriptionManager: React.FC = () => {
         proxies: pg.proxies.map((p) => ({ type: p.type, value: p.value })),
       })),
     );
-    form.setFieldsValue({
-      name: record.name,
-      providers: record.providers,
-      proxy_groups: proxyGroups,
-    });
-    setActiveProxyGroupKey(["0"]);
     setModalVisible(true);
+    setActiveProxyGroupKey(["0"]);
+    setTimeout(() => {
+      form.setFieldsValue({
+        name: record.name,
+        providers: record.providers,
+        proxy_groups: proxyGroups,
+      });
+    }, 0);
   };
 
   const handleDelete = async (id: number) => {
@@ -433,7 +438,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
         onOk={handleModalOk}
         onCancel={() => setModalVisible(false)}
         width={720}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item
@@ -502,302 +507,300 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                       Array.isArray(key) ? key.map(String) : key ? [String(key)] : [],
                     )
                   }
-                >
-                  {fields.map((field) => {
+                  items={fields.map((field) => {
                     const isReservedGroup = form.getFieldValue([
                       "proxy_groups",
                       field.name,
                       "is_system",
                     ]);
-                    return (
-                      <Collapse.Panel
-                        key={String(field.name)}
-                        forceRender
-                        header={
+                    return {
+                      key: String(field.name),
+                      forceRender: true,
+                      label: (
+                        <Form.Item
+                          noStyle
+                          shouldUpdate={(prev, curr) =>
+                            prev.proxy_groups?.[field.name]?.name !==
+                            curr.proxy_groups?.[field.name]?.name
+                          }
+                        >
+                          {() => (
+                            <Space>
+                              <Text strong>
+                                {form.getFieldValue([
+                                  "proxy_groups",
+                                  field.name,
+                                  "name",
+                                ]) || "New Group"}
+                              </Text>
+                              {isReservedGroup && (
+                                <Tag color="blue">System</Tag>
+                              )}
+                            </Space>
+                          )}
+                        </Form.Item>
+                      ),
+                      extra: !isReservedGroup && (
+                        <Popconfirm
+                          title="Remove this group?"
+                          onConfirm={() => remove(field.name)}
+                        >
+                          <DeleteOutlined
+                            style={{ color: token.colorError }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </Popconfirm>
+                      ),
+                      children: (
+                        <>
+                          <Form.Item name={[field.name, "is_system"]} hidden>
+                            <Input />
+                          </Form.Item>
+                          <Form.Item name={[field.name, "position"]} hidden>
+                            <InputNumber />
+                          </Form.Item>
+                          <Form.Item
+                            name={[field.name, "name"]}
+                            label="Name"
+                            rules={[{ required: true }]}
+                          >
+                            <Input
+                              placeholder="Media"
+                              disabled={isReservedGroup}
+                            />
+                          </Form.Item>
+                          <Form.Item
+                            name={[field.name, "type"]}
+                            label="Type"
+                            rules={[{ required: true }]}
+                          >
+                            <Select
+                              disabled={isReservedGroup}
+                              options={[
+                                { label: "select", value: "select" },
+                                { label: "url-test", value: "url-test" },
+                                { label: "fallback", value: "fallback" },
+                              ]}
+                            />
+                          </Form.Item>
+
                           <Form.Item
                             noStyle
                             shouldUpdate={(prev, curr) =>
-                              prev.proxy_groups?.[field.name]?.name !==
-                              curr.proxy_groups?.[field.name]?.name
+                              prev.proxy_groups?.[field.name]?.type !==
+                              curr.proxy_groups?.[field.name]?.type
                             }
                           >
-                            {() => (
-                              <Space>
-                                <Text strong>
-                                  {form.getFieldValue([
-                                    "proxy_groups",
-                                    field.name,
-                                    "name",
-                                  ]) || "New Group"}
-                                </Text>
-                                {isReservedGroup && (
-                                  <Tag color="blue">System</Tag>
-                                )}
-                              </Space>
-                            )}
-                          </Form.Item>
-                        }
-                        extra={
-                          !isReservedGroup && (
-                            <Popconfirm
-                              title="Remove this group?"
-                              onConfirm={() => remove(field.name)}
-                            >
-                              <DeleteOutlined
-                                style={{ color: token.colorError }}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            </Popconfirm>
-                          )
-                        }
-                      >
-                        <Form.Item name={[field.name, "is_system"]} hidden>
-                          <Input />
-                        </Form.Item>
-                        <Form.Item name={[field.name, "position"]} hidden>
-                          <InputNumber />
-                        </Form.Item>
-                        <Form.Item
-                          name={[field.name, "name"]}
-                          label="Name"
-                          rules={[{ required: true }]}
-                        >
-                          <Input
-                            placeholder="Media"
-                            disabled={isReservedGroup}
-                          />
-                        </Form.Item>
-                        <Form.Item
-                          name={[field.name, "type"]}
-                          label="Type"
-                          rules={[{ required: true }]}
-                        >
-                          <Select
-                            disabled={isReservedGroup}
-                            options={[
-                              { label: "select", value: "select" },
-                              { label: "url-test", value: "url-test" },
-                              { label: "fallback", value: "fallback" },
-                            ]}
-                          />
-                        </Form.Item>
-
-                        <Form.Item
-                          noStyle
-                          shouldUpdate={(prev, curr) =>
-                            prev.proxy_groups?.[field.name]?.type !==
-                            curr.proxy_groups?.[field.name]?.type
-                          }
-                        >
-                          {() => {
-                            const type = form.getFieldValue([
-                              "proxy_groups",
-                              field.name,
-                              "type",
-                            ]);
-                            if (type === "select") return null;
-                            return (
-                              <>
-                                <Form.Item
-                                  name={[field.name, "url"]}
-                                  label="URL"
-                                >
-                                  <Input placeholder="https://cp.cloudflare.com/generate_204" />
-                                </Form.Item>
-                                <Form.Item
-                                  name={[field.name, "interval"]}
-                                  label="Interval (seconds)"
-                                >
-                                  <InputNumber
-                                    min={0}
-                                    style={{ width: "100%" }}
-                                  />
-                                </Form.Item>
-                              </>
-                            );
-                          }}
-                        </Form.Item>
-
-                        <Form.Item
-                          noStyle
-                          shouldUpdate={(prev, curr) =>
-                            JSON.stringify(
-                              (prev.proxy_groups || []).map(
-                                (g: ProxyGroupFormValue) => g.bind_internal_proxy_group_id,
-                              ),
-                            ) !==
-                            JSON.stringify(
-                              (curr.proxy_groups || []).map(
-                                (g: ProxyGroupFormValue) => g.bind_internal_proxy_group_id,
-                              ),
-                            )
-                          }
-                        >
-                          {() => {
-                            const allGroups: ProxyGroupFormValue[] =
-                              form.getFieldValue("proxy_groups") || [];
-                            const usedIds = allGroups
-                              .filter((_: any, i: number) => i !== field.name)
-                              .map((g: ProxyGroupFormValue) => g.bind_internal_proxy_group_id)
-                              .filter(Boolean);
-                            return (
-                              <Form.Item
-                                name={[field.name, "bind_internal_proxy_group_id"]}
-                                label="Rules Bound Group"
-                              >
-                                <Select
-                                  allowClear
-                                  placeholder="Select internal group"
-                                  options={internalGroups
-                                    .filter((g) => !usedIds.includes(g.id))
-                                    .map((g) => ({ label: g.name, value: g.id }))}
-                                />
-                              </Form.Item>
-                            );
-                          }}
-                        </Form.Item>
-                        <Form.List name={[field.name, "proxies"]}>
-                          {(
-                            memberFields,
-                            { add: addMember, remove: removeMember },
-                          ) => (
-                            <>
-                              <div
-                                style={{
-                                  marginBottom: 4,
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                }}
-                              >
-                                <Text strong>Members</Text>
-                                <Button
-                                  size="small"
-                                  icon={<PlusOutlined />}
-                                  onClick={() =>
-                                    addMember({
-                                      type: "DIRECT",
-                                      value: "DIRECT",
-                                    })
-                                  }
-                                >
-                                  Add Member
-                                </Button>
-                              </div>
-                              {memberFields.map((mf) => (
-                                <Space
-                                  key={mf.key}
-                                  style={{ display: "flex", marginBottom: 4 }}
-                                  align="baseline"
-                                >
-                                  <Form.Item name={[mf.name, "type"]} noStyle>
-                                    <Select
-                                      style={{ width: 120 }}
-                                      options={[
-                                        {
-                                          label: "Internal",
-                                          value: "internal",
-                                        },
-                                        {
-                                          label: "Reference",
-                                          value: "reference",
-                                        },
-                                        { label: "DIRECT", value: "DIRECT" },
-                                        { label: "REJECT", value: "REJECT" },
-                                      ]}
-                                    />
+                            {() => {
+                              const type = form.getFieldValue([
+                                "proxy_groups",
+                                field.name,
+                                "type",
+                              ]);
+                              if (type === "select") return null;
+                              return (
+                                <>
+                                  <Form.Item
+                                    name={[field.name, "url"]}
+                                    label="URL"
+                                  >
+                                    <Input placeholder="https://cp.cloudflare.com/generate_204" />
                                   </Form.Item>
                                   <Form.Item
-                                    noStyle
-                                    shouldUpdate={(prev, curr) =>
-                                      prev.proxy_groups?.[field.name]
-                                        ?.proxies?.[mf.name]?.type !==
-                                      curr.proxy_groups?.[field.name]
-                                        ?.proxies?.[mf.name]?.type
+                                    name={[field.name, "interval"]}
+                                    label="Interval (seconds)"
+                                  >
+                                    <InputNumber
+                                      min={0}
+                                      style={{ width: "100%" }}
+                                    />
+                                  </Form.Item>
+                                </>
+                              );
+                            }}
+                          </Form.Item>
+
+                          <Form.Item
+                            noStyle
+                            shouldUpdate={(prev, curr) =>
+                              JSON.stringify(
+                                (prev.proxy_groups || []).map(
+                                  (g: ProxyGroupFormValue) => g.bind_internal_proxy_group_id,
+                                ),
+                              ) !==
+                              JSON.stringify(
+                                (curr.proxy_groups || []).map(
+                                  (g: ProxyGroupFormValue) => g.bind_internal_proxy_group_id,
+                                ),
+                              )
+                            }
+                          >
+                            {() => {
+                              const allGroups: ProxyGroupFormValue[] =
+                                form.getFieldValue("proxy_groups") || [];
+                              const usedIds = allGroups
+                                .filter((_: any, i: number) => i !== field.name)
+                                .map((g: ProxyGroupFormValue) => g.bind_internal_proxy_group_id)
+                                .filter(Boolean);
+                              return (
+                                <Form.Item
+                                  name={[field.name, "bind_internal_proxy_group_id"]}
+                                  label="Rules Bound Group"
+                                >
+                                  <Select
+                                    allowClear
+                                    placeholder="Select internal group"
+                                    options={internalGroups
+                                      .filter((g) => !usedIds.includes(g.id))
+                                      .map((g) => ({ label: g.name, value: g.id }))}
+                                  />
+                                </Form.Item>
+                              );
+                            }}
+                          </Form.Item>
+                          <Form.List name={[field.name, "proxies"]}>
+                            {(
+                              memberFields,
+                              { add: addMember, remove: removeMember },
+                            ) => (
+                              <>
+                                <div
+                                  style={{
+                                    marginBottom: 4,
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <Text strong>Members</Text>
+                                  <Button
+                                    size="small"
+                                    icon={<PlusOutlined />}
+                                    onClick={() =>
+                                      addMember({
+                                        type: "DIRECT",
+                                        value: "DIRECT",
+                                      })
                                     }
                                   >
-                                    {() => {
-                                      const type = form.getFieldValue([
-                                        "proxy_groups",
-                                        field.name,
-                                        "proxies",
-                                        mf.name,
-                                        "type",
-                                      ]);
-                                      if (type === "internal") {
-                                        return (
-                                          <Form.Item
-                                            name={[mf.name, "value"]}
-                                            noStyle
-                                            rules={[{ required: true }]}
-                                          >
-                                            <Select
-                                              placeholder="Select Group"
-                                              style={{ width: 200 }}
-                                              options={internalGroups.map(
-                                                (g) => ({
-                                                  label: g.name,
-                                                  value: String(g.id),
-                                                }),
-                                              )}
-                                            />
-                                          </Form.Item>
-                                        );
+                                    Add Member
+                                  </Button>
+                                </div>
+                                {memberFields.map((mf) => (
+                                  <Space
+                                    key={mf.key}
+                                    style={{ display: "flex", marginBottom: 4 }}
+                                    align="baseline"
+                                  >
+                                    <Form.Item name={[mf.name, "type"]} noStyle>
+                                      <Select
+                                        style={{ width: 120 }}
+                                        options={[
+                                          {
+                                            label: "Internal",
+                                            value: "internal",
+                                          },
+                                          {
+                                            label: "Reference",
+                                            value: "reference",
+                                          },
+                                          { label: "DIRECT", value: "DIRECT" },
+                                          { label: "REJECT", value: "REJECT" },
+                                        ]}
+                                      />
+                                    </Form.Item>
+                                    <Form.Item
+                                      noStyle
+                                      shouldUpdate={(prev, curr) =>
+                                        prev.proxy_groups?.[field.name]
+                                          ?.proxies?.[mf.name]?.type !==
+                                        curr.proxy_groups?.[field.name]
+                                          ?.proxies?.[mf.name]?.type
                                       }
-                                      if (type === "reference") {
-                                        const allGroups: ProxyGroupFormValue[] =
-                                          form.getFieldValue("proxy_groups") || [];
-                                        const currentName = form.getFieldValue([
+                                    >
+                                      {() => {
+                                        const type = form.getFieldValue([
                                           "proxy_groups",
                                           field.name,
-                                          "name",
+                                          "proxies",
+                                          mf.name,
+                                          "type",
                                         ]);
+                                        if (type === "internal") {
+                                          return (
+                                            <Form.Item
+                                              name={[mf.name, "value"]}
+                                              noStyle
+                                              rules={[{ required: true }]}
+                                            >
+                                              <Select
+                                                placeholder="Select Group"
+                                                style={{ width: 200 }}
+                                                options={internalGroups.map(
+                                                  (g) => ({
+                                                    label: g.name,
+                                                    value: String(g.id),
+                                                  }),
+                                                )}
+                                              />
+                                            </Form.Item>
+                                          );
+                                        }
+                                        if (type === "reference") {
+                                          const allGroups: ProxyGroupFormValue[] =
+                                            form.getFieldValue("proxy_groups") || [];
+                                          const currentName = form.getFieldValue([
+                                            "proxy_groups",
+                                            field.name,
+                                            "name",
+                                          ]);
+                                          return (
+                                            <Form.Item
+                                              name={[mf.name, "value"]}
+                                              noStyle
+                                              rules={[{ required: true }]}
+                                            >
+                                              <Select
+                                                placeholder="Select Proxy Group"
+                                                style={{ width: 200 }}
+                                                options={allGroups
+                                                  .map((g) => g.name)
+                                                  .filter((n) => n && n !== currentName)
+                                                  .map((name) => ({ label: name, value: name }))}
+                                              />
+                                            </Form.Item>
+                                          );
+                                        }
                                         return (
                                           <Form.Item
                                             name={[mf.name, "value"]}
                                             noStyle
                                             rules={[{ required: true }]}
                                           >
-                                            <Select
-                                              placeholder="Select Proxy Group"
+                                            <Input
+                                              placeholder="value"
                                               style={{ width: 200 }}
-                                              options={allGroups
-                                                .map((g) => g.name)
-                                                .filter((n) => n && n !== currentName)
-                                                .map((name) => ({ label: name, value: name }))}
                                             />
                                           </Form.Item>
                                         );
-                                      }
-                                      return (
-                                        <Form.Item
-                                          name={[mf.name, "value"]}
-                                          noStyle
-                                          rules={[{ required: true }]}
-                                        >
-                                          <Input
-                                            placeholder="value"
-                                            style={{ width: 200 }}
-                                          />
-                                        </Form.Item>
-                                      );
-                                    }}
-                                  </Form.Item>
-                                  <Button
-                                    danger
-                                    size="small"
-                                    icon={<DeleteOutlined />}
-                                    onClick={() => removeMember(mf.name)}
-                                  />
-                                </Space>
-                              ))}
-                            </>
-                          )}
-                        </Form.List>
-                      </Collapse.Panel>
-                    );
+                                      }}
+                                    </Form.Item>
+                                    <Button
+                                      danger
+                                      size="small"
+                                      icon={<DeleteOutlined />}
+                                      onClick={() => removeMember(mf.name)}
+                                    />
+                                  </Space>
+                                ))}
+                              </>
+                            )}
+                          </Form.List>
+                        </>
+                      ),
+                    };
                   })}
-                </Collapse>
+                />
               </>
             )}
           </Form.List>
@@ -807,7 +810,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
       <Drawer
         title="Content Preview"
         placement="right"
-        width={800}
+        size="large"
         onClose={() => setPreviewDrawerVisible(false)}
         open={previewDrawerVisible}
         loading={previewLoading}

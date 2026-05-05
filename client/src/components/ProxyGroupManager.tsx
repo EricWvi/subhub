@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, message, Popconfirm, Typography, Tag } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, App, Popconfirm, Typography, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import MonacoEditor from '@monaco-editor/react';
 import { formatDate24h, useMonacoTheme } from '../utils';
@@ -43,6 +43,7 @@ const MonacoEditorWrapper: React.FC = () => {
 };
 
 const ProxyGroupManager: React.FC = () => {
+  const { message } = App.useApp();
   const monacoTheme = useMonacoTheme();
   const [groups, setGroups] = useState<ProxyGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -89,13 +90,11 @@ const ProxyGroupManager: React.FC = () => {
 
   const handleAdd = () => {
     setEditingGroup(null);
-    form.resetFields();
     setModalVisible(true);
   };
 
   const handleEdit = (record: ProxyGroup) => {
     setEditingGroup(record);
-    form.setFieldsValue(record);
     setModalVisible(true);
   };
 
@@ -206,7 +205,7 @@ const ProxyGroupManager: React.FC = () => {
           onExpandedRowsChange: (keys) => setExpandedRowKeys(keys),
           expandedRowRender: (record) => (
             <div style={{ padding: '8px 40px' }}>
-              <Space direction="vertical" style={{ width: '100%' }} size="large">
+              <Space orientation="vertical" style={{ width: '100%' }} size="large">
                 {record.script && (
                   <div>
                     <Title level={5}>Script</Title>
@@ -250,15 +249,15 @@ const ProxyGroupManager: React.FC = () => {
         }}
       />
 
-      <Modal
+      <Modal key={editingGroup?.id || "add"}
         title={editingGroup ? 'Edit Proxy Group' : 'Add Proxy Group'}
         open={modalVisible}
         onOk={handleModalOk}
         onCancel={() => setModalVisible(false)}
-        destroyOnClose
+        
         width={800}
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" preserve={false} initialValues={editingGroup || {}}>
           <Form.Item
             name="name"
             label="Name"

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ConfigProvider, theme, Layout, Menu, Typography } from "antd";
+import { ConfigProvider, theme, Layout, Menu, Typography, App as AntdApp } from "antd";
 import ProviderManager from "./components/ProviderManager";
 import ProxyGroupManager from "./components/ProxyGroupManager";
 import RuleManager from "./components/RuleManager";
@@ -81,7 +81,9 @@ const App: React.FC = () => {
         algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
       }}
     >
-      <AppContent />
+      <AntdApp>
+        <AppContent />
+      </AntdApp>
     </ConfigProvider>
   );
 };
