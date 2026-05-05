@@ -4,6 +4,10 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/EricWvi/subhub/internal/config"
@@ -55,10 +59,33 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
+	mux.Handle("/", newFrontendHandler("dist"))
 
 	scheduler := refresh.NewScheduler(repo, refreshSvc.RefreshProvider, time.Minute)
 	go scheduler.Start(context.Background())
 
 	log.Printf("[MAIN] Starting SubHub on %s", cfg.ListenAddr)
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, mux))
+}
+
+func newFrontendHandler(distDir string) http.Handler {
+	fileServer := http.FileServer(http.Dir(distDir))
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
+			return
+		}
+
+		trimmedPath := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		targetPath := filepath.Join(distDir, filepath.FromSlash(trimmedPath))
+
+		info, err := os.Stat(targetPath)
+		if err == nil && !info.IsDir() {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
+	})
 }
