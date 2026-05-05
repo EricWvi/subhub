@@ -19,6 +19,7 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/rules", h.handleRules)
+	mux.HandleFunc("/rules/import", h.importRules)
 	mux.HandleFunc("/rules/", h.handleRuleByID)
 }
 
@@ -147,6 +148,29 @@ func (h *Handler) updateRule(w http.ResponseWriter, r *http.Request, id int64) {
 	log.Printf("[API] Updated rule %d", id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"rule": rule})
+}
+
+func (h *Handler) importRules(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	log.Printf("[API] POST /rules/import")
+	var in ImportRulesInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		log.Printf("[API] Decode import rules input failed: %v", err)
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	result, err := h.service.Import(r.Context(), in)
+	if err != nil {
+		log.Printf("[API] Import rules failed: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	log.Printf("[API] Imported %d rules, skipped %d", result.Imported, result.Skipped)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 func (h *Handler) deleteRule(w http.ResponseWriter, r *http.Request, id int64) {

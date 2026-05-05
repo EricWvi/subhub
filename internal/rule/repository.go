@@ -57,6 +57,23 @@ func (r *Repository) FindProxyGroupIDByName(ctx context.Context, name string) (i
 	return id, nil
 }
 
+func (r *Repository) BatchImport(ctx context.Context, records []CreateRuleRecord) (int, error) {
+	now := nowInLocation()
+	nowStr := now.Format(time.RFC3339)
+	imported := 0
+	for _, rec := range records {
+		_, err := r.db.ExecContext(ctx,
+			`INSERT INTO rules (rule_type, pattern, target_kind, proxy_group_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			rec.RuleType, rec.Pattern, rec.TargetKind, rec.ProxyGroupID, nowStr, nowStr,
+		)
+		if err != nil {
+			return imported, err
+		}
+		imported++
+	}
+	return imported, nil
+}
+
 func (r *Repository) Create(ctx context.Context, rec CreateRuleRecord) (Rule, error) {
 	now := nowInLocation()
 	result, err := r.db.ExecContext(ctx,

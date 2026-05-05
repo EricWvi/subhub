@@ -87,6 +87,61 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
+func (s *Service) Import(ctx context.Context, in ImportRulesInput) (*ImportRulesResult, error) {
+	lines := strings.Split(strings.TrimSpace(in.Rules), "\n")
+	if in.Reverse {
+		for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
+			lines[i], lines[j] = lines[j], lines[i]
+		}
+	}
+
+	var records []CreateRuleRecord
+	skipped := 0
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		line = strings.TrimPrefix(line, "- ")
+		parts := strings.SplitN(line, ",", 3)
+		if len(parts) != 3 {
+			skipped++
+			continue
+		}
+
+		ruleType := strings.TrimSpace(parts[0])
+		pattern := strings.TrimSpace(parts[1])
+		target := strings.TrimSpace(parts[2])
+		if ruleType == "" || pattern == "" || target == "" {
+			skipped++
+			continue
+		}
+
+		targetKind, proxyGroupID, err := s.resolveTarget(ctx, target)
+		if err != nil {
+			skipped++
+			continue
+		}
+
+		records = append(records, CreateRuleRecord{
+			RuleType:     ruleType,
+			Pattern:      pattern,
+			TargetKind:   targetKind,
+			ProxyGroupID: proxyGroupID,
+		})
+	}
+
+	if len(records) == 0 {
+		return &ImportRulesResult{Imported: 0, Skipped: skipped}, nil
+	}
+
+	imported, err := s.repo.BatchImport(ctx, records)
+	if err != nil {
+		return nil, err
+	}
+	return &ImportRulesResult{Imported: imported, Skipped: skipped}, nil
+}
+
 func (s *Service) List(ctx context.Context, in ListRulesInput) (*ListRulesResult, error) {
 	in = normalizeListInput(in)
 	rules, total, err := s.repo.List(ctx, in)

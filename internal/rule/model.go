@@ -23,6 +23,16 @@ type UpdateRuleInput struct {
 	ProxyGroup string `json:"proxy_group"`
 }
 
+type ImportRulesInput struct {
+	Rules   string `json:"rules"`
+	Reverse bool   `json:"reverse"`
+}
+
+type ImportRulesResult struct {
+	Imported int `json:"imported"`
+	Skipped  int `json:"skipped"`
+}
+
 type ListRulesResult struct {
 	Rules    []Rule `json:"rules"`
 	Page     int    `json:"page"`
