@@ -21,7 +21,7 @@ func nowInLocation() time.Time {
 }
 
 func (r *Repository) ListClashConfigs(ctx context.Context) ([]ClashConfigSubscription, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, name, created_at, updated_at FROM clash_config_subscriptions ORDER BY id`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, name, created_at, updated_at FROM clash_config_subscriptions ORDER BY id DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (r *Repository) ListClashConfigs(ctx context.Context) ([]ClashConfigSubscri
 }
 
 func (r *Repository) ListProxyProviders(ctx context.Context) ([]ProxyProviderSubscription, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, name, internal_proxy_group_id, created_at, updated_at FROM proxy_provider_subscriptions ORDER BY id`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, name, internal_proxy_group_id, created_at, updated_at FROM proxy_provider_subscriptions ORDER BY id DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (r *Repository) ListProxyProviders(ctx context.Context) ([]ProxyProviderSub
 }
 
 func (r *Repository) ListRuleProviders(ctx context.Context) ([]RuleProviderSubscription, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, name, internal_proxy_group_id, created_at, updated_at FROM rule_provider_subscriptions ORDER BY id`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, name, internal_proxy_group_id, created_at, updated_at FROM rule_provider_subscriptions ORDER BY id DESC`)
 	if err != nil {
 		return nil, err
 	}

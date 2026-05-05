@@ -63,7 +63,7 @@ func (c *Client) doFetch(ctx context.Context, httpClient *http.Client, url strin
 	if err != nil {
 		return Response{}, err
 	}
-	req.Header.Set("User-Agent", "clash-verge/1.4.11")
+	req.Header.Set("User-Agent", "clash-verge/v2.4.7")
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return Response{}, err

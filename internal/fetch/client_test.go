@@ -15,7 +15,7 @@ import (
 func TestFetchRetry(t *testing.T) {
 	var count int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "clash-verge/1.4.11", r.Header.Get("User-Agent"))
+		assert.Equal(t, "clash-verge/v2.4.7", r.Header.Get("User-Agent"))
 		atomic.AddInt32(&count, 1)
 		if atomic.LoadInt32(&count) == 1 {
 			w.WriteHeader(http.StatusBadGateway)
@@ -28,7 +28,7 @@ func TestFetchRetry(t *testing.T) {
 
 	// Mock proxy that just forwards to the test server
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "clash-verge/1.4.11", r.Header.Get("User-Agent"))
+		assert.Equal(t, "clash-verge/v2.4.7", r.Header.Get("User-Agent"))
 		if atomic.LoadInt32(&count) == 1 {
 			atomic.AddInt32(&count, 1)
 			w.WriteHeader(http.StatusOK)
@@ -78,7 +78,7 @@ func TestFetchProxyEnv(t *testing.T) {
 
 	client := NewClient(5 * time.Second)
 	assert.NotNil(t, client.proxyHttpClient)
-	
+
 	// Default client should NOT have proxy
 	if client.httpClient.Transport != nil {
 		transport := client.httpClient.Transport.(*http.Transport)

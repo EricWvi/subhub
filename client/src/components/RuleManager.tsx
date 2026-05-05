@@ -277,6 +277,7 @@ const RuleManager: React.FC = () => {
           current: page,
           pageSize,
           total,
+          showSizeChanger: false,
           onChange: (nextPage, nextPageSize) =>
             fetchRules(nextPage, nextPageSize, searchText),
         }}

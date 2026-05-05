@@ -200,6 +200,7 @@ const ProxyGroupManager: React.FC = () => {
         dataSource={groups} 
         rowKey="id" 
         loading={loading}
+        pagination={{ pageSize: 20, showSizeChanger: false }}
         expandable={{
           expandedRowKeys,
           onExpandedRowsChange: (keys) => setExpandedRowKeys(keys),
@@ -234,7 +235,7 @@ const ProxyGroupManager: React.FC = () => {
                     ]}
                     dataSource={groupNodes[record.id] || []}
                     rowKey="id"
-                    pagination={false}
+                    pagination={{ pageSize: 20, showSizeChanger: false, hideOnSinglePage: true }}
                     loading={nodesLoading[record.id]}
                   />
                 </div>

@@ -137,6 +137,7 @@ const RuleProviderSubscriptionManager: React.FC = () => {
       </div>
       <Table
         rowKey="id" loading={loading} dataSource={subscriptions}
+        pagination={{ pageSize: 20, showSizeChanger: false }}
         columns={[
           { title: 'Name', dataIndex: 'name', key: 'name' },
           { title: 'Providers', key: 'providers', render: (_: any, r: RuleProviderSubscription) => r.providers.map(id => providerMap[id] || id).join(' → ') },

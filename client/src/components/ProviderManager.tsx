@@ -306,6 +306,7 @@ const ProviderManager: React.FC = () => {
         dataSource={providers} 
         rowKey="id" 
         loading={loading} 
+        pagination={{ pageSize: 20, showSizeChanger: false }}
         expandable={{
           expandedRowRender: (record) => (
             <div style={{ padding: '8px 40px' }}>
@@ -338,7 +339,7 @@ const ProviderManager: React.FC = () => {
                 ]}
                 dataSource={providerNodes[record.id] || []}
                 rowKey="id"
-                pagination={false}
+                pagination={{ pageSize: 20, showSizeChanger: false, hideOnSinglePage: true }}
                 loading={nodesLoading[record.id]}
               />
             </div>

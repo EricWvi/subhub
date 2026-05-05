@@ -59,7 +59,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (ProxyGroup, error) 
 
 func (r *Repository) List(ctx context.Context) ([]ProxyGroup, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, name, script_text, created_at, updated_at FROM proxy_groups ORDER BY id`,
+		`SELECT id, name, script_text, created_at, updated_at FROM proxy_groups ORDER BY id DESC`,
 	)
 	if err != nil {
 		return nil, err

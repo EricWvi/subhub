@@ -338,6 +338,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
         rowKey="id"
         loading={loading}
         dataSource={subscriptions}
+        pagination={{ pageSize: 20, showSizeChanger: false }}
         columns={[
           { title: "Name", dataIndex: "name", key: "name" },
           {

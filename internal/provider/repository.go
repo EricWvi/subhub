@@ -46,7 +46,7 @@ func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 			ra.status, ra.message
 		FROM providers p
 		LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
-		ORDER BY p.id`,
+		ORDER BY p.id DESC`,
 	)
 	if err != nil {
 		return nil, err
