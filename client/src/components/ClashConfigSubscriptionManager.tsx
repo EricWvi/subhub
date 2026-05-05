@@ -194,6 +194,13 @@ const ClashConfigSubscriptionManager: React.FC = () => {
     fetchInternalGroups();
   }, []);
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditingSub(null);
+    setActiveProxyGroupKey(["0"]);
+    form.resetFields();
+  };
+
   const handleAdd = () => {
     setEditingSub(null);
     setModalVisible(true);
@@ -276,7 +283,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
 
       if (response.ok) {
         message.success(`Subscription ${editingSub ? "updated" : "added"}`);
-        setModalVisible(false);
+        closeModal();
         fetchSubscriptions();
       } else {
         const errorText = await response.text();
@@ -437,7 +444,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
         }
         open={modalVisible}
         onOk={handleModalOk}
-        onCancel={() => setModalVisible(false)}
+        onCancel={closeModal}
         width={720}
         destroyOnHidden
       >

@@ -55,13 +55,23 @@ const ProxyProviderSubscriptionManager: React.FC = () => {
 
   useEffect(() => { fetchData(); }, []);
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditingSub(null);
+    form.resetFields();
+  };
+
   const handleAdd = () => {
     setEditingSub(null);
+    form.resetFields();
+    form.setFieldsValue({ name: '', providers: [], internal_proxy_group_id: undefined });
     setModalVisible(true);
   };
 
   const handleEdit = (record: ProxyProviderSubscription) => {
     setEditingSub(record);
+    form.resetFields();
+    form.setFieldsValue(record);
     setModalVisible(true);
   };
 
@@ -92,7 +102,7 @@ const ProxyProviderSubscriptionManager: React.FC = () => {
       });
       if (response.ok) {
         message.success(`Subscription ${editingSub ? 'updated' : 'added'}`);
-        setModalVisible(false);
+        closeModal();
         fetchData();
       } else {
         message.error(`Failed: ${await response.text()}`);
@@ -158,8 +168,8 @@ const ProxyProviderSubscriptionManager: React.FC = () => {
           },
         ]}
       />
-      <Modal key={editingSub?.id || "add"} title={editingSub ? 'Edit' : 'Add'} open={modalVisible} onOk={handleModalOk} onCancel={() => setModalVisible(false)} >
-        <Form form={form} layout="vertical" preserve={false} initialValues={editingSub || {}}>
+      <Modal key={editingSub?.id || "add"} title={editingSub ? 'Edit' : 'Add'} open={modalVisible} onOk={handleModalOk} onCancel={closeModal} >
+        <Form form={form} layout="vertical" preserve={false}>
           <Form.Item name="name" label="Name" rules={[{ required: true }]}>
             <Input placeholder="HK Export" />
           </Form.Item>

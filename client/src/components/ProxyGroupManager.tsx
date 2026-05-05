@@ -88,13 +88,23 @@ const ProxyGroupManager: React.FC = () => {
     fetchGroups();
   }, []);
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditingGroup(null);
+    form.resetFields();
+  };
+
   const handleAdd = () => {
     setEditingGroup(null);
+    form.resetFields();
+    form.setFieldsValue({ name: '', script: '' });
     setModalVisible(true);
   };
 
   const handleEdit = (record: ProxyGroup) => {
     setEditingGroup(record);
+    form.resetFields();
+    form.setFieldsValue(record);
     setModalVisible(true);
   };
 
@@ -140,7 +150,7 @@ const ProxyGroupManager: React.FC = () => {
             });
           }
         }
-        setModalVisible(false);
+        closeModal();
         fetchGroups();
       } else {
         const errorText = await response.text();
@@ -254,11 +264,11 @@ const ProxyGroupManager: React.FC = () => {
         title={editingGroup ? 'Edit Proxy Group' : 'Add Proxy Group'}
         open={modalVisible}
         onOk={handleModalOk}
-        onCancel={() => setModalVisible(false)}
+        onCancel={closeModal}
         
         width={800}
       >
-        <Form form={form} layout="vertical" preserve={false} initialValues={editingGroup || {}}>
+        <Form form={form} layout="vertical" preserve={false}>
           <Form.Item
             name="name"
             label="Name"

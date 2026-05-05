@@ -112,15 +112,37 @@ const RuleManager: React.FC = () => {
     fetchProxyGroupOptions();
   }, []);
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditingRule(null);
+    setCustomRuleType(false);
+    form.resetFields();
+  };
+
   const handleAdd = () => {
     setEditingRule(null);
     setCustomRuleType(false);
+    form.resetFields();
+    form.setFieldsValue({
+      rule_type_selector: "DOMAIN-SUFFIX",
+      rule_type: undefined,
+      pattern: "",
+      proxy_group: "DIRECT",
+    });
     setModalVisible(true);
   };
 
   const handleEdit = (record: Rule) => {
     setEditingRule(record);
-    setCustomRuleType(!BUILT_IN_RULE_TYPES.includes(record.rule_type));
+    const isCustomRuleType = !BUILT_IN_RULE_TYPES.includes(record.rule_type);
+    setCustomRuleType(isCustomRuleType);
+    form.resetFields();
+    form.setFieldsValue({
+      rule_type_selector: isCustomRuleType ? "__custom__" : record.rule_type,
+      rule_type: record.rule_type,
+      pattern: record.pattern,
+      proxy_group: record.proxy_group,
+    });
     setModalVisible(true);
   };
 
@@ -160,7 +182,7 @@ const RuleManager: React.FC = () => {
 
       if (response.ok) {
         message.success(`Rule ${editingRule ? "updated" : "added"}`);
-        setModalVisible(false);
+        closeModal();
         fetchRules(page, pageSize, searchText);
       } else {
         const errorText = await response.text();
@@ -288,21 +310,12 @@ const RuleManager: React.FC = () => {
         title={editingRule ? "Edit Rule" : "Add Rule"}
         open={modalVisible}
         onOk={handleModalOk}
-        onCancel={() => setModalVisible(false)}
+        onCancel={closeModal}
       >
         <Form 
           form={form} 
           layout="vertical" 
           preserve={false}
-          initialValues={editingRule ? {
-            rule_type_selector: !BUILT_IN_RULE_TYPES.includes(editingRule.rule_type) ? "__custom__" : editingRule.rule_type,
-            rule_type: editingRule.rule_type,
-            pattern: editingRule.pattern,
-            proxy_group: editingRule.proxy_group,
-          } : {
-            rule_type_selector: "DOMAIN-SUFFIX",
-            proxy_group: "DIRECT",
-          }}
         >
           <Form.Item
             name="rule_type_selector"

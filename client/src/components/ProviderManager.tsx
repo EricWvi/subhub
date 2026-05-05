@@ -87,13 +87,23 @@ const ProviderManager: React.FC = () => {
     fetchProviders();
   }, []);
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditingProvider(null);
+    form.resetFields();
+  };
+
   const handleAdd = () => {
     setEditingProvider(null);
+    form.resetFields();
+    form.setFieldsValue({ refresh_interval_minutes: 120 });
     setModalVisible(true);
   };
 
   const handleEdit = (record: Provider) => {
     setEditingProvider(record);
+    form.resetFields();
+    form.setFieldsValue(record);
     setModalVisible(true);
   };
 
@@ -190,7 +200,7 @@ const ProviderManager: React.FC = () => {
 
       if (response.ok) {
         message.success(`Provider ${editingProvider ? 'updated' : 'added'}`);
-        setModalVisible(false);
+        closeModal();
         fetchProviders();
       } else {
         const errorText = await response.text();
@@ -356,10 +366,10 @@ const ProviderManager: React.FC = () => {
         title={editingProvider ? 'Edit Provider' : 'Add Provider'}
         open={modalVisible}
         onOk={handleModalOk}
-        onCancel={() => setModalVisible(false)}
+        onCancel={closeModal}
         
       >
-        <Form form={form} layout="vertical" preserve={false} initialValues={editingProvider || { refresh_interval_minutes: 120 }}>
+        <Form form={form} layout="vertical" preserve={false}>
           <Form.Item
             name="name"
             label="Name"
