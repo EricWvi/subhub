@@ -16,9 +16,10 @@ import {
   Tag,
   Collapse,
   Drawer,
+  Dropdown,
   theme,
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined, ImportOutlined } from "@ant-design/icons";
 import Editor from "@monaco-editor/react";
 import { formatDate24h, useMonacoTheme } from "../utils";
 
@@ -199,6 +200,26 @@ const ClashConfigSubscriptionManager: React.FC = () => {
     setEditingSub(null);
     setActiveProxyGroupKey(["0"]);
     form.resetFields();
+  };
+
+  const handleImportProxyGroups = (subId: number) => {
+    const source = subscriptions.find((s) => s.id === subId);
+    if (!source) return;
+    const imported = normalizeProxyGroups(
+      source.proxy_groups.map((pg) => ({
+        name: pg.name,
+        type: pg.type,
+        position: pg.position,
+        url: pg.url,
+        interval: pg.interval,
+        bind_internal_proxy_group_id: pg.bind_internal_proxy_group_id,
+        is_system: pg.is_system,
+        proxies: pg.proxies.map((p) => ({ type: p.type, value: p.value })),
+      })),
+    );
+    form.setFieldValue("proxy_groups", imported);
+    setActiveProxyGroupKey(["0"]);
+    message.success(`Imported proxy groups from "${source.name}"`);
   };
 
   const handleAdd = () => {
@@ -487,25 +508,48 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                   }}
                 >
                   <Text strong>Proxy Groups</Text>
-                  <Button
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => {
-                      add({
-                        name: "",
-                        type: "select",
-                        position: fields.length,
-                        url: "",
-                        interval: 0,
-                        proxies: [],
-                        bind_internal_proxy_group_id: undefined,
-                        is_system: false,
-                      });
-                      setActiveProxyGroupKey([String(fields.length)]);
-                    }}
-                  >
-                    Add Proxy Group
-                  </Button>
+                  <Space>
+                    <Button
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        add({
+                          name: "",
+                          type: "select",
+                          position: fields.length,
+                          url: "",
+                          interval: 0,
+                          proxies: [],
+                          bind_internal_proxy_group_id: undefined,
+                          is_system: false,
+                        });
+                        setActiveProxyGroupKey([String(fields.length)]);
+                      }}
+                    >
+                      Add Proxy Group
+                    </Button>
+                    {subscriptions.filter((s) => s.id !== editingSub?.id).length > 0 && (
+                      <Dropdown
+                        menu={{
+                          items: subscriptions
+                            .filter((s) => s.id !== editingSub?.id)
+                            .map((s) => ({
+                              key: String(s.id),
+                              label: s.name,
+                            })),
+                          onClick: ({ key }) =>
+                            handleImportProxyGroups(Number(key)),
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          icon={<ImportOutlined />}
+                        >
+                          Import
+                        </Button>
+                      </Dropdown>
+                    )}
+                  </Space>
                 </div>
                 <Collapse
                   accordion
