@@ -43,7 +43,7 @@ func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT 
 			p.id, p.name, p.url, p.refresh_interval_minutes, p.abbrev, p.used, p.total, p.expire, p.created_at, p.updated_at,
-			ra.status, ra.message
+			ra.status, ra.message, ra.attempted_at
 		FROM providers p
 		LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
 		ORDER BY p.id DESC`,
@@ -57,14 +57,17 @@ func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 	for rows.Next() {
 		var p Provider
 		var createdAt, updatedAt string
-		var status, message sql.NullString
-		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message); err != nil {
+		var status, message, attemptedAt sql.NullString
+		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message, &attemptedAt); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 		p.LastRefreshStatus = status.String
 		p.LastRefreshMessage = message.String
+		if attemptedAt.Valid {
+			p.LastAttemptedAt, _ = time.Parse(time.RFC3339, attemptedAt.String)
+		}
 		providers = append(providers, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -76,15 +79,15 @@ func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 func (r *Repository) GetByID(ctx context.Context, id int64) (Provider, error) {
 	var p Provider
 	var createdAt, updatedAt string
-	var status, message sql.NullString
+	var status, message, attemptedAt sql.NullString
 	err := r.db.QueryRowContext(ctx,
-		`SELECT 
+		`SELECT
 			p.id, p.name, p.url, p.refresh_interval_minutes, p.abbrev, p.used, p.total, p.expire, p.created_at, p.updated_at,
-			ra.status, ra.message
+			ra.status, ra.message, ra.attempted_at
 		FROM providers p
 		LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
 		WHERE p.id = ?`, id,
-	).Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message)
+	).Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message, &attemptedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Provider{}, ErrNotFound
@@ -95,6 +98,9 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (Provider, error) {
 	p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 	p.LastRefreshStatus = status.String
 	p.LastRefreshMessage = message.String
+	if attemptedAt.Valid {
+		p.LastAttemptedAt, _ = time.Parse(time.RFC3339, attemptedAt.String)
+	}
 	return p, nil
 }
 

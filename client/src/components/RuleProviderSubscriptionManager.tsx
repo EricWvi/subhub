@@ -137,7 +137,9 @@ const RuleProviderSubscriptionManager: React.FC = () => {
   };
 
   const providerMap = Object.fromEntries(providers.map(p => [p.id, p.name]));
-  const groupMap = Object.fromEntries(internalGroups.map(g => [g.id, g.name]));
+  const groupMap: Record<number, string> = Object.fromEntries(internalGroups.map(g => [g.id, g.name]));
+  groupMap[-1] = 'DIRECT';
+  groupMap[-2] = 'REJECT';
 
   return (
     <div>
@@ -177,7 +179,11 @@ const RuleProviderSubscriptionManager: React.FC = () => {
             <Select mode="multiple" options={providers.map(p => ({ label: p.name, value: p.id }))} />
           </Form.Item>
           <Form.Item name="internal_proxy_group_id" label="Internal Proxy Group" rules={[{ required: true }]}>
-            <Select options={internalGroups.map(g => ({ label: g.name, value: g.id }))} />
+            <Select options={[
+              { label: 'DIRECT', value: -1 },
+              { label: 'REJECT', value: -2 },
+              ...internalGroups.map(g => ({ label: g.name, value: g.id })),
+            ]} />
           </Form.Item>
         </Form>
       </Modal>

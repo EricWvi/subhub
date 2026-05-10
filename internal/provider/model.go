@@ -15,6 +15,7 @@ type Provider struct {
 	UpdatedAt              time.Time `json:"updated_at"`
 	LastRefreshStatus      string    `json:"last_refresh_status,omitempty"`
 	LastRefreshMessage     string    `json:"last_refresh_message,omitempty"`
+	LastAttemptedAt        time.Time `json:"last_attempted_at"`
 }
 
 type ProxyNode struct {

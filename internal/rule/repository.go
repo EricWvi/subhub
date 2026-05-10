@@ -231,14 +231,30 @@ type RuleOutputRow struct {
 }
 
 func (r *Repository) ListForInternalGroup(ctx context.Context, groupID int64) ([]string, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT r.rule_type, r.pattern,
-		        CASE WHEN r.target_kind = 'PROXY_GROUP' THEN pg.name ELSE r.target_kind END AS proxy_group
-		 FROM rules r
-		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
-		 WHERE r.proxy_group_id = ?
-		 ORDER BY r.id DESC`, groupID,
-	)
+	var rows *sql.Rows
+	var err error
+	switch groupID {
+	case -1:
+		rows, err = r.db.QueryContext(ctx,
+			`SELECT r.rule_type, r.pattern, 'DIRECT'
+			 FROM rules r
+			 WHERE r.target_kind = 'DIRECT'
+			 ORDER BY r.id DESC`)
+	case -2:
+		rows, err = r.db.QueryContext(ctx,
+			`SELECT r.rule_type, r.pattern, 'REJECT'
+			 FROM rules r
+			 WHERE r.target_kind = 'REJECT'
+			 ORDER BY r.id DESC`)
+	default:
+		rows, err = r.db.QueryContext(ctx,
+			`SELECT r.rule_type, r.pattern,
+			        CASE WHEN r.target_kind = 'PROXY_GROUP' THEN pg.name ELSE r.target_kind END AS proxy_group
+			 FROM rules r
+			 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id
+			 WHERE r.proxy_group_id = ?
+			 ORDER BY r.id DESC`, groupID)
+	}
 	if err != nil {
 		return nil, err
 	}

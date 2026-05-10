@@ -59,7 +59,11 @@ func (s *Scheduler) RunOnce(ctx context.Context) {
 
 	now := s.clock.Now()
 	for _, p := range providers {
-		dueAt := p.UpdatedAt.Add(time.Duration(p.RefreshIntervalMinutes) * time.Minute)
+		lastAt := p.LastAttemptedAt
+		if lastAt.IsZero() {
+			lastAt = p.UpdatedAt
+		}
+		dueAt := lastAt.Add(time.Duration(p.RefreshIntervalMinutes) * time.Minute)
 		if now.Before(dueAt) {
 			continue
 		}
