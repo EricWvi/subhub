@@ -74,6 +74,7 @@ func (s *Service) Create(ctx context.Context, in CreateProviderInput) (Provider,
 		URL:                    in.URL,
 		RefreshIntervalMinutes: interval,
 		Abbrev:                 abbrev,
+		AutoFetch:              true,
 	})
 }
 
@@ -148,4 +149,8 @@ func (s *Service) ListNodes(ctx context.Context, providerID int64) ([]ProxyNode,
 
 func (s *Service) ToggleNodeEnabled(ctx context.Context, nodeID int64) (bool, error) {
 	return s.repo.ToggleNodeEnabled(ctx, nodeID)
+}
+
+func (s *Service) ToggleAutoFetch(ctx context.Context, id int64) (bool, error) {
+	return s.repo.ToggleAutoFetch(ctx, id)
 }

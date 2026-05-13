@@ -24,10 +24,11 @@ func nowInLocation() time.Time {
 }
 
 func (r *Repository) Create(ctx context.Context, p Provider) (Provider, error) {
+	p.AutoFetch = true
 	now := nowInLocation()
 	result, err := r.db.ExecContext(ctx,
-		`INSERT INTO providers (name, url, refresh_interval_minutes, abbrev, used, total, expire, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.Name, p.URL, p.RefreshIntervalMinutes, p.Abbrev, p.Used, p.Total, p.Expire, now.Format(time.RFC3339), now.Format(time.RFC3339),
+		`INSERT INTO providers (name, url, refresh_interval_minutes, abbrev, auto_fetch, used, total, expire, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.Name, p.URL, p.RefreshIntervalMinutes, p.Abbrev, p.AutoFetch, p.Used, p.Total, p.Expire, now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	if err != nil {
 		return Provider{}, err
@@ -41,12 +42,12 @@ func (r *Repository) Create(ctx context.Context, p Provider) (Provider, error) {
 
 func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT 
-			p.id, p.name, p.url, p.refresh_interval_minutes, p.abbrev, p.used, p.total, p.expire, p.created_at, p.updated_at,
-			ra.status, ra.message, ra.attempted_at
-		FROM providers p
-		LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
-		ORDER BY p.id DESC`,
+		`SELECT
+				p.id, p.name, p.url, p.refresh_interval_minutes, p.abbrev, p.auto_fetch, p.used, p.total, p.expire, p.created_at, p.updated_at,
+				ra.status, ra.message, ra.attempted_at
+			FROM providers p
+			LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
+			ORDER BY p.id DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -57,10 +58,12 @@ func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 	for rows.Next() {
 		var p Provider
 		var createdAt, updatedAt string
+		var autoFetch int64
 		var status, message, attemptedAt sql.NullString
-		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message, &attemptedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &autoFetch, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message, &attemptedAt); err != nil {
 			return nil, err
 		}
+		p.AutoFetch = autoFetch == 1
 		p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 		p.LastRefreshStatus = status.String
@@ -78,22 +81,24 @@ func (r *Repository) List(ctx context.Context) ([]Provider, error) {
 
 func (r *Repository) GetByID(ctx context.Context, id int64) (Provider, error) {
 	var p Provider
-	var createdAt, updatedAt string
-	var status, message, attemptedAt sql.NullString
-	err := r.db.QueryRowContext(ctx,
+	row := r.db.QueryRowContext(ctx,
 		`SELECT
-			p.id, p.name, p.url, p.refresh_interval_minutes, p.abbrev, p.used, p.total, p.expire, p.created_at, p.updated_at,
-			ra.status, ra.message, ra.attempted_at
-		FROM providers p
-		LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
-		WHERE p.id = ?`, id,
-	).Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message, &attemptedAt)
-	if err != nil {
+				p.id, p.name, p.url, p.refresh_interval_minutes, p.abbrev, p.auto_fetch, p.used, p.total, p.expire, p.created_at, p.updated_at,
+				ra.status, ra.message, ra.attempted_at
+			FROM providers p
+			LEFT JOIN refresh_attempts ra ON p.id = ra.provider_id
+			WHERE p.id = ?`, id,
+	)
+	var createdAt, updatedAt string
+	var autoFetch int64
+	var status, message, attemptedAt sql.NullString
+	if err := row.Scan(&p.ID, &p.Name, &p.URL, &p.RefreshIntervalMinutes, &p.Abbrev, &autoFetch, &p.Used, &p.Total, &p.Expire, &createdAt, &updatedAt, &status, &message, &attemptedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Provider{}, ErrNotFound
 		}
 		return Provider{}, err
 	}
+	p.AutoFetch = autoFetch == 1
 	p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 	p.LastRefreshStatus = status.String
@@ -107,8 +112,8 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (Provider, error) {
 func (r *Repository) Update(ctx context.Context, p Provider) (Provider, error) {
 	now := nowInLocation()
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE providers SET name = ?, url = ?, refresh_interval_minutes = ?, abbrev = ?, used = ?, total = ?, expire = ?, updated_at = ? WHERE id = ?`,
-		p.Name, p.URL, p.RefreshIntervalMinutes, p.Abbrev, p.Used, p.Total, p.Expire, now.Format(time.RFC3339), p.ID,
+		`UPDATE providers SET name = ?, url = ?, refresh_interval_minutes = ?, abbrev = ?, auto_fetch = ?, used = ?, total = ?, expire = ?, updated_at = ? WHERE id = ?`,
+		p.Name, p.URL, p.RefreshIntervalMinutes, p.Abbrev, p.AutoFetch, p.Used, p.Total, p.Expire, now.Format(time.RFC3339), p.ID,
 	)
 	if err != nil {
 		return Provider{}, err
@@ -147,13 +152,13 @@ func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerI
 	nowStr := now.Format(time.RFC3339)
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO provider_snapshots (provider_id, format, normalized_yaml, node_count, fetched_at) 
-		 VALUES (?, ?, ?, ?, ?)
-		 ON CONFLICT(provider_id) DO UPDATE SET 
-		 	format=excluded.format, 
-			normalized_yaml=excluded.normalized_yaml, 
-			node_count=excluded.node_count, 
-			fetched_at=excluded.fetched_at`,
+		`INSERT INTO provider_snapshots (provider_id, format, normalized_yaml, node_count, fetched_at)
+			 VALUES (?, ?, ?, ?, ?)
+			 ON CONFLICT(provider_id) DO UPDATE SET
+			 	format=excluded.format,
+				normalized_yaml=excluded.normalized_yaml,
+				node_count=excluded.node_count,
+				fetched_at=excluded.fetched_at`,
 		providerID, in.Format, string(normalizedYAML), len(in.Nodes), nowStr,
 	)
 	if err != nil {
@@ -162,7 +167,7 @@ func (r *Repository) ReplaceLastKnownGoodSnapshot(ctx context.Context, providerI
 
 	_, err = tx.ExecContext(ctx,
 		`INSERT INTO refresh_attempts (provider_id, status, message, attempted_at) VALUES (?, 'success', 'OK', ?)
-		 ON CONFLICT(provider_id) DO UPDATE SET status=excluded.status, message=excluded.message, attempted_at=excluded.attempted_at`,
+			 ON CONFLICT(provider_id) DO UPDATE SET status=excluded.status, message=excluded.message, attempted_at=excluded.attempted_at`,
 		providerID, nowStr,
 	)
 	if err != nil {
@@ -225,7 +230,7 @@ func (r *Repository) RecordRefreshFailure(ctx context.Context, providerID int64,
 	now := nowInLocation()
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO refresh_attempts (provider_id, status, message, attempted_at) VALUES (?, 'failure', ?, ?)
-		 ON CONFLICT(provider_id) DO UPDATE SET status=excluded.status, message=excluded.message, attempted_at=excluded.attempted_at`,
+			 ON CONFLICT(provider_id) DO UPDATE SET status=excluded.status, message=excluded.message, attempted_at=excluded.attempted_at`,
 		providerID, message, now.Format(time.RFC3339),
 	)
 	return err
@@ -234,9 +239,9 @@ func (r *Repository) RecordRefreshFailure(ctx context.Context, providerID int64,
 func (r *Repository) ListProxyNodesByProvider(ctx context.Context, providerID int64) ([]ProxyNode, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, provider_id, name, raw_yaml, update_mark, enabled
-		 FROM proxy_nodes
-		 WHERE provider_id = ?
-		 ORDER BY id`,
+			 FROM proxy_nodes
+			 WHERE provider_id = ?
+			 ORDER BY id`,
 		providerID,
 	)
 	if err != nil {
@@ -348,6 +353,26 @@ func (r *Repository) ToggleNodeEnabled(ctx context.Context, nodeID int64) (bool,
 		newVal = 0
 	}
 	_, err = r.db.ExecContext(ctx, `UPDATE proxy_nodes SET enabled = ? WHERE id = ?`, newVal, nodeID)
+	if err != nil {
+		return false, err
+	}
+	return newVal == 1, nil
+}
+
+func (r *Repository) ToggleAutoFetch(ctx context.Context, id int64) (bool, error) {
+	var autoFetch int64
+	err := r.db.QueryRowContext(ctx, `SELECT auto_fetch FROM providers WHERE id = ?`, id).Scan(&autoFetch)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, err
+	}
+	newVal := 1
+	if autoFetch == 1 {
+		newVal = 0
+	}
+	_, err = r.db.ExecContext(ctx, `UPDATE providers SET auto_fetch = ? WHERE id = ?`, newVal, id)
 	if err != nil {
 		return false, err
 	}

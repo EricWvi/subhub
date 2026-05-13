@@ -8,6 +8,7 @@ type Provider struct {
 	URL                    string    `json:"url"`
 	RefreshIntervalMinutes int64     `json:"refresh_interval_minutes"`
 	Abbrev                 string    `json:"abbrev"`
+	AutoFetch              bool      `json:"auto_fetch"`
 	Used                   int64     `json:"used"`
 	Total                  int64     `json:"total"`
 	Expire                 int64     `json:"expire"`

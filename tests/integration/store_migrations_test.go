@@ -19,7 +19,7 @@ func TestMustOpenRecordsAppliedMigrationsOnce(t *testing.T) {
 	var appliedCount int
 	err := db.QueryRow(`SELECT COUNT(*) FROM migrations`).Scan(&appliedCount)
 	require.NoError(t, err)
-	assert.Equal(t, 5, appliedCount)
+	assert.Equal(t, 7, appliedCount)
 
 	rows, err := db.Query(`SELECT filename, applied_at FROM migrations ORDER BY filename`)
 	require.NoError(t, err)
@@ -32,7 +32,7 @@ func TestMustOpenRecordsAppliedMigrationsOnce(t *testing.T) {
 		assert.NotEmpty(t, appliedAt)
 	}
 	require.NoError(t, rows.Err())
-	assert.Equal(t, []string{"001_initial.sql", "002_add_rules.sql", "003_add_subscriptions.sql", "004_add_clash_config_proxy_group_position.sql", "005_proxy_nodes_enabled.sql"}, filenames)
+	assert.Equal(t, []string{"001_initial.sql", "002_add_rules.sql", "003_add_subscriptions.sql", "004_add_clash_config_proxy_group_position.sql", "005_proxy_nodes_enabled.sql", "006_drop_rule_provider_fk.sql", "007_provider_auto_fetch.sql"}, filenames)
 
 	require.NoError(t, db.Close())
 
@@ -41,7 +41,7 @@ func TestMustOpenRecordsAppliedMigrationsOnce(t *testing.T) {
 
 	err = reopened.QueryRow(`SELECT COUNT(*) FROM migrations`).Scan(&appliedCount)
 	require.NoError(t, err)
-	assert.Equal(t, 5, appliedCount)
+	assert.Equal(t, 7, appliedCount)
 }
 
 func TestMustOpenCreatesMigrationHistoryTable(t *testing.T) {
@@ -73,7 +73,9 @@ func TestMustOpenSkipsAlreadyAppliedMigrationWhenTableExists(t *testing.T) {
 		('002_add_rules.sql', '2026-05-02T08:00:00+08:00'),
 		('003_add_subscriptions.sql', '2026-05-02T08:00:00+08:00'),
 		('004_add_clash_config_proxy_group_position.sql', '2026-05-02T08:00:00+08:00'),
-		('005_proxy_nodes_enabled.sql', '2026-05-02T08:00:00+08:00')`)
+		('005_proxy_nodes_enabled.sql', '2026-05-02T08:00:00+08:00'),
+		('006_drop_rule_provider_fk.sql', '2026-05-02T08:00:00+08:00'),
+		('007_provider_auto_fetch.sql', '2026-05-02T08:00:00+08:00')`)
 	require.NoError(t, err)
 	require.NoError(t, rawDB.Close())
 
@@ -150,6 +152,14 @@ CREATE TABLE IF NOT EXISTS proxy_nodes (
 	update_mark INTEGER NOT NULL DEFAULT 0,
 	UNIQUE(provider_id, name),
 	FOREIGN KEY(provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS rule_provider_subscriptions (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	internal_proxy_group_id INTEGER NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
 );
 `)
 	require.NoError(t, err)

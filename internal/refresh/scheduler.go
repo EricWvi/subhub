@@ -59,6 +59,9 @@ func (s *Scheduler) RunOnce(ctx context.Context) {
 
 	now := s.clock.Now()
 	for _, p := range providers {
+		if !p.AutoFetch {
+			continue
+		}
 		lastAt := p.LastAttemptedAt
 		if lastAt.IsZero() {
 			lastAt = p.UpdatedAt

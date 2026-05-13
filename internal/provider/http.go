@@ -77,6 +77,11 @@ func (h *Handler) handleProviderByID(w http.ResponseWriter, r *http.Request) {
 				h.toggleNode(w, r, id, nodeID)
 				return
 			}
+		case "toggle-auto-fetch":
+			if r.Method == http.MethodPost {
+				h.toggleAutoFetch(w, r, id)
+				return
+			}
 		}
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -286,4 +291,20 @@ func (h *Handler) toggleNode(w http.ResponseWriter, r *http.Request, providerID,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"enabled": enabled})
+}
+
+func (h *Handler) toggleAutoFetch(w http.ResponseWriter, r *http.Request, id int64) {
+	log.Printf("[API] POST /providers/%d/toggle-auto-fetch", id)
+	autoFetch, err := h.service.ToggleAutoFetch(r.Context(), id)
+	if err != nil {
+		log.Printf("[API] Toggle auto_fetch for provider %d failed: %v", id, err)
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, "provider not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"auto_fetch": autoFetch})
 }
