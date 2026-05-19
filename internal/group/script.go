@@ -8,7 +8,7 @@ import (
 	"github.com/dop251/goja"
 )
 
-func SelectNodeIDs(script string, nodes []ProxyNodeView) ([]int64, error) {
+func SelectNodeIDs(script string, nodes []ResolvedNode) ([]int64, error) {
 	if strings.TrimSpace(script) == "" {
 		return allNodeIDs(nodes), nil
 	}
@@ -48,7 +48,7 @@ func toJSONObject(v any) (any, error) {
 	return out, nil
 }
 
-func allNodeIDs(nodes []ProxyNodeView) []int64 {
+func allNodeIDs(nodes []ResolvedNode) []int64 {
 	ids := make([]int64, len(nodes))
 	for i, node := range nodes {
 		ids[i] = node.ID
@@ -56,7 +56,7 @@ func allNodeIDs(nodes []ProxyNodeView) []int64 {
 	return ids
 }
 
-func exportNodeIDs(value any, nodes []ProxyNodeView) ([]int64, error) {
+func exportNodeIDs(value any, nodes []ResolvedNode) ([]int64, error) {
 	raw, ok := value.([]any)
 	if !ok {
 		return nil, errors.New("script must return number[]")

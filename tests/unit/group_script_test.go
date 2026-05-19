@@ -9,7 +9,7 @@ import (
 )
 
 func TestSelectNodeIDsReturnsAllNodesForEmptyScript(t *testing.T) {
-	nodes := []group.ProxyNodeView{
+	nodes := []group.ResolvedNode{
 		{ID: 11, ProviderName: "alpha", Name: "vmess-hk-01"},
 		{ID: 12, ProviderName: "alpha", Name: "ss-jp-01"},
 	}
@@ -20,7 +20,7 @@ func TestSelectNodeIDsReturnsAllNodesForEmptyScript(t *testing.T) {
 }
 
 func TestSelectNodeIDsRunsJavaScriptFunction(t *testing.T) {
-	nodes := []group.ProxyNodeView{
+	nodes := []group.ResolvedNode{
 		{ID: 11, ProviderName: "alpha", Name: "vmess-hk-01"},
 		{ID: 12, ProviderName: "beta", Name: "ss-jp-01"},
 	}
@@ -31,14 +31,14 @@ func TestSelectNodeIDsRunsJavaScriptFunction(t *testing.T) {
 }
 
 func TestSelectNodeIDsRejectsNonFunctionScript(t *testing.T) {
-	nodes := []group.ProxyNodeView{{ID: 11, ProviderName: "alpha", Name: "vmess-hk-01"}}
+	nodes := []group.ResolvedNode{{ID: 11, ProviderName: "alpha", Name: "vmess-hk-01"}}
 
 	_, err := group.SelectNodeIDs(`var x = 1`, nodes)
 	require.Error(t, err)
 }
 
 func TestSelectNodeIDsRejectsUnknownIDs(t *testing.T) {
-	nodes := []group.ProxyNodeView{{ID: 11, ProviderName: "alpha", Name: "vmess-hk-01"}}
+	nodes := []group.ResolvedNode{{ID: 11, ProviderName: "alpha", Name: "vmess-hk-01"}}
 
 	_, err := group.SelectNodeIDs(`function (proxyNodes) { return [999] }`, nodes)
 	require.Error(t, err)

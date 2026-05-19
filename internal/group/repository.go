@@ -122,6 +122,30 @@ func (r *Repository) ListProxyNodeViews(ctx context.Context) ([]ProxyNodeView, e
 	return nodes, rows.Err()
 }
 
+func (r *Repository) ListRawNodes(ctx context.Context) ([]ResolvedNode, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT n.id, n.provider_id, p.name, n.name, n.raw_yaml
+		 FROM proxy_nodes n
+		 JOIN providers p ON p.id = n.provider_id
+		 WHERE n.enabled = 1
+		 ORDER BY p.id, n.id`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var nodes []ResolvedNode
+	for rows.Next() {
+		var n ResolvedNode
+		if err := rows.Scan(&n.ID, &n.ProviderID, &n.ProviderName, &n.Name, &n.RawYAML); err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, n)
+	}
+	return nodes, rows.Err()
+}
+
 func (r *Repository) ListRawNodesByProviders(ctx context.Context, providerIDs []int64) ([]ResolvedNode, error) {
 	if len(providerIDs) == 0 {
 		return nil, nil

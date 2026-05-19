@@ -65,12 +65,12 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *Service) ListNodes(ctx context.Context, groupID int64) ([]ProxyNodeView, error) {
+func (s *Service) ListNodes(ctx context.Context, groupID int64) ([]ResolvedNode, error) {
 	group, err := s.repo.GetByID(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
-	nodes, err := s.repo.ListProxyNodeViews(ctx)
+	nodes, err := s.repo.ListRawNodes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -80,18 +80,18 @@ func (s *Service) ListNodes(ctx context.Context, groupID int64) ([]ProxyNodeView
 	return s.selectNodes(group.Script, nodes)
 }
 
-func (s *Service) selectNodes(script string, nodes []ProxyNodeView) ([]ProxyNodeView, error) {
+func (s *Service) selectNodes(script string, nodes []ResolvedNode) ([]ResolvedNode, error) {
 	selectedIDs, err := SelectNodeIDs(script, nodes)
 	if err != nil {
 		return nodes, nil
 	}
 
-	byID := map[int64]ProxyNodeView{}
+	byID := map[int64]ResolvedNode{}
 	for _, node := range nodes {
 		byID[node.ID] = node
 	}
 
-	var selected []ProxyNodeView
+	var selected []ResolvedNode
 	for _, id := range selectedIDs {
 		selected = append(selected, byID[id])
 	}
@@ -114,11 +114,7 @@ func (s *Service) ResolveNodesForOutput(ctx context.Context, groupID int64, allo
 
 	var filteredNodes []ResolvedNode
 	if strings.TrimSpace(g.Script) != "" {
-		var views []ProxyNodeView
-		for _, n := range rawNodes {
-			views = append(views, ProxyNodeView{ID: n.ID, ProviderName: n.ProviderName, Name: n.Name})
-		}
-		selectedIDs, err := SelectNodeIDs(g.Script, views)
+		selectedIDs, err := SelectNodeIDs(g.Script, rawNodes)
 		if err != nil {
 			filteredNodes = rawNodes
 		} else {
