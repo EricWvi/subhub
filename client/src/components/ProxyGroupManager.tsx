@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, App, Popconfirm, Typography, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import MonacoEditor from '@monaco-editor/react';
+import MonacoEditor, { type OnMount } from '@monaco-editor/react';
 import { formatDate24h, useMonacoTheme } from '../utils';
 import { useApiClient } from '../api';
+import { claimKeyboardPriority } from './keyboardPriority';
 
 const { Title } = Typography;
 
@@ -25,6 +26,12 @@ const MonacoEditorWrapper: React.FC = () => {
   const form = Form.useFormInstance();
   const value = Form.useWatch('script', form) ?? '';
   const monacoTheme = useMonacoTheme();
+  const handleMount: OnMount = (editor) => {
+    const root = editor.getDomNode();
+    if (!root) return;
+    const release = claimKeyboardPriority(root);
+    editor.onDidDispose(release);
+  };
 
   return (
     <MonacoEditor
@@ -32,8 +39,10 @@ const MonacoEditorWrapper: React.FC = () => {
       language="javascript"
       value={value}
       theme={monacoTheme}
+      onMount={handleMount}
       onChange={(val) => form.setFieldValue('script', val ?? '')}
       options={{
+        editContext: false,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         fontSize: 14,
