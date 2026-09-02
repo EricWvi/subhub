@@ -3,6 +3,7 @@ import { Table, Button, Space, Modal, Form, Input, Select, App, Popconfirm, Typo
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import { formatDate24h, useMonacoTheme } from '../utils';
+import { useApiClient } from '../api';
 
 const { Title, Text } = Typography;
 
@@ -20,6 +21,7 @@ interface InternalGroup { id: number; name: string; }
 
 const RuleProviderSubscriptionManager: React.FC = () => {
   const { message } = App.useApp();
+  const apiClient = useApiClient();
   const monacoTheme = useMonacoTheme();
   const [subscriptions, setSubscriptions] = useState<RuleProviderSubscription[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,9 +38,9 @@ const RuleProviderSubscriptionManager: React.FC = () => {
     setLoading(true);
     try {
       const [subRes, provRes, groupRes] = await Promise.all([
-        fetch('/api/subscriptions/rule-providers'),
-        fetch('/api/providers'),
-        fetch('/api/proxy-groups'),
+        apiClient('/api/subscriptions/rule-providers'),
+        apiClient('/api/providers'),
+        apiClient('/api/proxy-groups'),
       ]);
       const subData = await subRes.json();
       const provData = await provRes.json();
@@ -77,7 +79,7 @@ const RuleProviderSubscriptionManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      const response = await fetch(`/api/subscriptions/rule-providers/${id}`, { method: 'DELETE' });
+      const response = await apiClient(`/api/subscriptions/rule-providers/${id}`, { method: 'DELETE' });
       if (response.ok) {
         message.success('Subscription deleted');
         fetchData();
@@ -95,7 +97,7 @@ const RuleProviderSubscriptionManager: React.FC = () => {
       const values = await form.validateFields();
       const url = editingSub ? `/api/subscriptions/rule-providers/${editingSub.id}` : '/api/subscriptions/rule-providers';
       const method = editingSub ? 'PUT' : 'POST';
-      const response = await fetch(url, {
+      const response = await apiClient(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
@@ -120,7 +122,7 @@ const RuleProviderSubscriptionManager: React.FC = () => {
     setPreviewLoading(true);
     setPreviewDrawerVisible(true);
     try {
-      const response = await fetch(`/api/subscriptions/rule-providers/${id}/content`);
+      const response = await apiClient(`/api/subscriptions/rule-providers/${id}/content`);
       if (response.ok) {
         const text = await response.text();
         setPreviewContent(text);

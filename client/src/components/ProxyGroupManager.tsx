@@ -3,6 +3,7 @@ import { Table, Button, Space, Modal, Form, Input, App, Popconfirm, Typography, 
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import MonacoEditor from '@monaco-editor/react';
 import { formatDate24h, useMonacoTheme } from '../utils';
+import { useApiClient } from '../api';
 
 const { Title } = Typography;
 
@@ -44,6 +45,7 @@ const MonacoEditorWrapper: React.FC = () => {
 
 const ProxyGroupManager: React.FC = () => {
   const { message } = App.useApp();
+  const apiClient = useApiClient();
   const monacoTheme = useMonacoTheme();
   const [groups, setGroups] = useState<ProxyGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,7 +60,7 @@ const ProxyGroupManager: React.FC = () => {
   const fetchGroups = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/proxy-groups');
+      const response = await apiClient('/api/proxy-groups');
       const data = await response.json();
       setGroups(data.groups || []);
     } catch (error) {
@@ -72,7 +74,7 @@ const ProxyGroupManager: React.FC = () => {
     if (!force && groupNodes[groupId]) return;
     setNodesLoading(prev => ({ ...prev, [groupId]: true }));
     try {
-      const response = await fetch(`/api/proxy-groups/${groupId}/nodes`);
+      const response = await apiClient(`/api/proxy-groups/${groupId}/nodes`);
       if (response.ok) {
         const data = await response.json();
         setGroupNodes(prev => ({ ...prev, [groupId]: data.nodes || [] }));
@@ -110,7 +112,7 @@ const ProxyGroupManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      const response = await fetch(`/api/proxy-groups/${id}`, { method: 'DELETE' });
+      const response = await apiClient(`/api/proxy-groups/${id}`, { method: 'DELETE' });
       if (response.ok) {
         message.success('Proxy group deleted');
         fetchGroups();
@@ -129,7 +131,7 @@ const ProxyGroupManager: React.FC = () => {
       const url = editingGroup ? `/api/proxy-groups/${editingGroup.id}` : '/api/proxy-groups';
       const method = editingGroup ? 'PUT' : 'POST';
 
-      const response = await fetch(url, {
+      const response = await apiClient(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),

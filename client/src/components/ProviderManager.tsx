@@ -24,6 +24,7 @@ import {
 } from "@ant-design/icons";
 import Editor from "@monaco-editor/react";
 import { formatDate24h, formatBytes, useMonacoTheme } from "../utils";
+import { useApiClient } from "../api";
 
 const { Title, Text } = Typography;
 
@@ -62,6 +63,7 @@ interface Snapshot {
 
 const ProviderManager: React.FC = () => {
   const { message } = App.useApp();
+  const apiClient = useApiClient();
   const monacoTheme = useMonacoTheme();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,7 +76,7 @@ const ProviderManager: React.FC = () => {
     if (providerNodes[providerId]) return;
     setNodesLoading((prev) => ({ ...prev, [providerId]: true }));
     try {
-      const response = await fetch(`/api/providers/${providerId}/nodes`);
+      const response = await apiClient(`/api/providers/${providerId}/nodes`);
       if (response.ok) {
         const data = await response.json();
         setProviderNodes((prev) => ({
@@ -100,7 +102,7 @@ const ProviderManager: React.FC = () => {
   const fetchProviders = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/providers");
+      const response = await apiClient("/api/providers");
       const data = await response.json();
       setProviders(data.providers || []);
     } catch (error) {
@@ -136,7 +138,7 @@ const ProviderManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      const response = await fetch(`/api/providers/${id}`, {
+      const response = await apiClient(`/api/providers/${id}`, {
         method: "DELETE",
       });
       if (response.ok) {
@@ -153,7 +155,7 @@ const ProviderManager: React.FC = () => {
 
   const handleRefresh = async (id: number) => {
     try {
-      const response = await fetch(`/api/providers/${id}/refresh`, {
+      const response = await apiClient(`/api/providers/${id}/refresh`, {
         method: "POST",
       });
       if (response.ok) {
@@ -177,7 +179,7 @@ const ProviderManager: React.FC = () => {
     setSnapshotLoading(true);
     setSnapshotDrawerVisible(true);
     try {
-      const response = await fetch(`/api/providers/${id}/snapshot`);
+      const response = await apiClient(`/api/providers/${id}/snapshot`);
       if (response.ok) {
         const data = await response.json();
         setCurrentSnapshot(data.snapshot);
@@ -198,7 +200,7 @@ const ProviderManager: React.FC = () => {
 
   const handleToggleNode = async (providerId: number, nodeId: number) => {
     try {
-      const response = await fetch(
+      const response = await apiClient(
         `/api/providers/${providerId}/nodes/toggle/${nodeId}`,
         { method: "POST" },
       );
@@ -224,7 +226,7 @@ const ProviderManager: React.FC = () => {
 
   const handleToggleAutoFetch = async (id: number) => {
     try {
-      const response = await fetch(`/api/providers/${id}/toggle-auto-fetch`, {
+      const response = await apiClient(`/api/providers/${id}/toggle-auto-fetch`, {
         method: "POST",
       });
       if (response.ok) {
@@ -250,7 +252,7 @@ const ProviderManager: React.FC = () => {
         : "/api/providers";
       const method = editingProvider ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const response = await apiClient(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),

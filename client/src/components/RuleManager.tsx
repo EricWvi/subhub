@@ -21,6 +21,7 @@ import {
   QuestionCircleOutlined,
 } from "@ant-design/icons";
 import { formatDate24h } from "../utils";
+import { useApiClient } from "../api";
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -52,6 +53,7 @@ const IMPORT_HELP = (
 
 const RuleManager: React.FC = () => {
   const { message } = App.useApp();
+  const apiClient = useApiClient();
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -81,7 +83,7 @@ const RuleManager: React.FC = () => {
         page_size: String(nextPageSize),
       });
       if (search) params.set("search", search);
-      const response = await fetch(`/api/rules?${params}`);
+      const response = await apiClient(`/api/rules?${params}`);
       const data = await response.json();
       setRules(data.rules || []);
       setPage(data.page || nextPage);
@@ -96,7 +98,7 @@ const RuleManager: React.FC = () => {
 
   const fetchProxyGroupOptions = async () => {
     try {
-      const response = await fetch("/api/proxy-groups");
+      const response = await apiClient("/api/proxy-groups");
       const data = await response.json();
       const dynamicNames = (data.groups || []).map(
         (group: { name: string }) => group.name,
@@ -148,7 +150,7 @@ const RuleManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      const response = await fetch(`/api/rules/${id}`, { method: "DELETE" });
+      const response = await apiClient(`/api/rules/${id}`, { method: "DELETE" });
       if (!response.ok) {
         message.error(`Delete failed: ${await response.text()}`);
         return;
@@ -174,7 +176,7 @@ const RuleManager: React.FC = () => {
       const url = editingRule ? `/api/rules/${editingRule.id}` : "/api/rules";
       const method = editingRule ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const response = await apiClient(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submitValues),
@@ -200,7 +202,7 @@ const RuleManager: React.FC = () => {
     }
     setImporting(true);
     try {
-      const response = await fetch("/api/rules/import", {
+      const response = await apiClient("/api/rules/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rules: importText, reverse: importReverse }),

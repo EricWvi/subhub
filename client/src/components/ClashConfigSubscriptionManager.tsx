@@ -22,6 +22,7 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined, ImportOutlined } from "@ant-design/icons";
 import Editor from "@monaco-editor/react";
 import { formatDate24h, useMonacoTheme } from "../utils";
+import { useApiClient } from "../api";
 
 const { Title, Text } = Typography;
 
@@ -134,6 +135,7 @@ const normalizeProxyGroups = (
 
 const ClashConfigSubscriptionManager: React.FC = () => {
   const { message } = App.useApp();
+  const apiClient = useApiClient();
   const { token } = theme.useToken();
   const monacoTheme = useMonacoTheme();
   const [subscriptions, setSubscriptions] = useState<ClashConfigSubscription[]>(
@@ -157,7 +159,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
   const fetchSubscriptions = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/subscriptions/clash-configs");
+      const response = await apiClient("/api/subscriptions/clash-configs");
       const data = await response.json();
       setSubscriptions(data.subscriptions || []);
     } catch (error) {
@@ -169,7 +171,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
 
   const fetchProviders = async () => {
     try {
-      const response = await fetch("/api/providers");
+      const response = await apiClient("/api/providers");
       const data = await response.json();
       setProviders(data.providers || []);
     } catch (error) {
@@ -179,7 +181,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
 
   const fetchInternalGroups = async () => {
     try {
-      const response = await fetch("/api/proxy-groups");
+      const response = await apiClient("/api/proxy-groups");
       const data = await response.json();
       setInternalGroups(
         (data.groups || []).map((g: any) => ({ id: g.id, name: g.name })),
@@ -263,7 +265,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      const response = await fetch(`/api/subscriptions/clash-configs/${id}`, {
+      const response = await apiClient(`/api/subscriptions/clash-configs/${id}`, {
         method: "DELETE",
       });
       if (response.ok) {
@@ -296,7 +298,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
         : "/api/subscriptions/clash-configs";
       const method = editingSub ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const response = await apiClient(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -325,7 +327,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
     setPreviewLoading(true);
     setPreviewDrawerVisible(true);
     try {
-      const response = await fetch(`/api/subscriptions/clash-configs/${id}/content`);
+      const response = await apiClient(`/api/subscriptions/clash-configs/${id}/content`);
       if (response.ok) {
         const text = await response.text();
         setPreviewContent(text);

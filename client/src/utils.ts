@@ -1,47 +1,49 @@
 import { theme } from "antd";
 
+const shanghaiDateTimeFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+export const getMonacoThemeMode = (color: string): "vs" | "vs-dark" => {
+  let hex = color.replace("#", "");
+  if (hex.length === 3) {
+    hex = hex
+      .split("")
+      .map((part) => part + part)
+      .join("");
+  }
+
+  const red = parseInt(hex.substring(0, 2), 16);
+  const green = parseInt(hex.substring(2, 4), 16);
+  const blue = parseInt(hex.substring(4, 6), 16);
+
+  if (isNaN(red) || isNaN(green) || isNaN(blue)) return "vs";
+
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+
+  return brightness < 128 ? "vs-dark" : "vs";
+};
+
 export const useMonacoTheme = () => {
   const { token } = theme.useToken();
-
-  const getThemeMode = (color: string) => {
-    // 1. 去掉 # 号并处理 3 位简写 (如 #000 -> 000000)
-    let hex = color.replace("#", "");
-    if (hex.length === 3) {
-      hex = hex
-        .split("")
-        .map((s) => s + s)
-        .join("");
-    }
-
-    // 2. 提取 RGB 值
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-
-    // 3. 如果解析失败（比如不是有效的 Hex），默认返回亮色
-    if (isNaN(r) || isNaN(g) || isNaN(b)) return "vs";
-
-    // 4. YIQ 亮度算法：计算结果在 0-255 之间
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-
-    return brightness < 128 ? "vs-dark" : "vs";
-  };
-
-  const monacoTheme = getThemeMode(token.colorBgBase);
-
-  return monacoTheme;
+  return getMonacoThemeMode(token.colorBgBase);
 };
 
 export const formatDate24h = (dateStr: string): string => {
   const date = new Date(dateStr);
-  const pad = (num: number) => num.toString().padStart(2, "0");
-  const y = date.getFullYear();
-  const m = pad(date.getMonth() + 1);
-  const d = pad(date.getDate());
-  const h = pad(date.getHours());
-  const min = pad(date.getMinutes());
-  const s = pad(date.getSeconds());
-  return `${y}-${m}-${d} ${h}:${min}:${s}`;
+  const parts = Object.fromEntries(
+    shanghaiDateTimeFormatter
+      .formatToParts(date)
+      .map(({ type, value }) => [type, value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 };
 
 export const formatBytes = (bytes: number, decimals = 2): string => {
