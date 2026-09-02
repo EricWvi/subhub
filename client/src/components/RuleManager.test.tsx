@@ -15,6 +15,66 @@ const existingRule = {
 };
 
 describe("RuleManager", () => {
+  it("filters rules by proxy group", async () => {
+    const user = userEvent.setup();
+    const rules = [
+      existingRule,
+      {
+        ...existingRule,
+        id: 2,
+        pattern: "streaming.example",
+        proxy_group: "Streaming",
+      },
+    ];
+    const apiClient = vi.fn<ApiClient>(async (input) => {
+      const url = input.toString();
+
+      if (url === "/api/proxy-groups") {
+        return Response.json({ groups: [{ name: "Streaming" }] });
+      }
+      if (url.includes("proxy_group=Streaming")) {
+        return Response.json({
+          rules: [rules[1]],
+          page: 1,
+          page_size: 20,
+          total: 1,
+        });
+      }
+      if (url.startsWith("/api/rules?")) {
+        return Response.json({
+          rules,
+          page: 1,
+          page_size: 20,
+          total: rules.length,
+        });
+      }
+
+      return Response.json({}, { status: 404 });
+    });
+
+    renderWithProviders(<RuleManager />, { apiClient });
+
+    expect(await screen.findByText("existing.example")).toBeInTheDocument();
+    expect(screen.getByText("streaming.example")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("combobox", { name: "Filter by proxy group" }),
+    );
+    await user.click(
+      await screen.findByText("Streaming", {
+        selector: ".ant-select-item-option-content",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        "/api/rules?page=1&page_size=20&proxy_group=Streaming",
+      ),
+    );
+    expect(screen.queryByText("existing.example")).not.toBeInTheDocument();
+    expect(screen.getByText("streaming.example")).toBeInTheDocument();
+  });
+
   it("keeps another rule's values when editing it after adding a rule", async () => {
     const user = userEvent.setup();
     let rules = [existingRule];

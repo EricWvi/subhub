@@ -65,6 +65,7 @@ const RuleManager: React.FC = () => {
     useState<string[]>(STATIC_PROXY_GROUPS);
   const [customRuleType, setCustomRuleType] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [proxyGroupFilter, setProxyGroupFilter] = useState("");
   const [importVisible, setImportVisible] = useState(false);
   const [importText, setImportText] = useState("");
   const [importReverse, setImportReverse] = useState(true);
@@ -75,6 +76,7 @@ const RuleManager: React.FC = () => {
     nextPage = page,
     nextPageSize = pageSize,
     search = searchText,
+    proxyGroup = proxyGroupFilter,
   ) => {
     setLoading(true);
     try {
@@ -83,6 +85,7 @@ const RuleManager: React.FC = () => {
         page_size: String(nextPageSize),
       });
       if (search) params.set("search", search);
+      if (proxyGroup) params.set("proxy_group", proxyGroup);
       const response = await apiClient(`/api/rules?${params}`);
       const data = await response.json();
       setRules(data.rules || []);
@@ -156,7 +159,7 @@ const RuleManager: React.FC = () => {
         return;
       }
       message.success("Rule deleted");
-      fetchRules(page, pageSize, searchText);
+      fetchRules(page, pageSize, searchText, proxyGroupFilter);
     } catch (error) {
       message.error("Failed to delete rule");
     }
@@ -185,7 +188,7 @@ const RuleManager: React.FC = () => {
       if (response.ok) {
         message.success(`Rule ${editingRule ? "updated" : "added"}`);
         closeModal();
-        fetchRules(page, pageSize, searchText);
+        fetchRules(page, pageSize, searchText, proxyGroupFilter);
       } else {
         const errorText = await response.text();
         message.error(`Operation failed: ${errorText}`);
@@ -217,7 +220,7 @@ const RuleManager: React.FC = () => {
       );
       setImportVisible(false);
       setImportText("");
-      fetchRules(1, pageSize, searchText);
+      fetchRules(1, pageSize, searchText, proxyGroupFilter);
     } catch (error) {
       message.error("Import failed");
     } finally {
@@ -242,9 +245,26 @@ const RuleManager: React.FC = () => {
             allowClear
             onSearch={(value) => {
               setSearchText(value);
-              fetchRules(1, pageSize, value);
+              fetchRules(1, pageSize, value, proxyGroupFilter);
             }}
             style={{ width: 250 }}
+          />
+          <Select
+            aria-label="Filter by proxy group"
+            allowClear
+            showSearch
+            id="proxy-group-filter"
+            options={proxyGroupOptions.map((name) => ({
+              label: name,
+              value: name,
+            }))}
+            onChange={(value) => {
+              const nextProxyGroup = value || "";
+              setProxyGroupFilter(nextProxyGroup);
+              fetchRules(1, pageSize, searchText, nextProxyGroup);
+            }}
+            placeholder="Filter by proxy group"
+            style={{ width: 200 }}
           />
           <Button
             icon={<ImportOutlined />}
@@ -304,7 +324,7 @@ const RuleManager: React.FC = () => {
           total,
           showSizeChanger: false,
           onChange: (nextPage, nextPageSize) =>
-            fetchRules(nextPage, nextPageSize, searchText),
+            fetchRules(nextPage, nextPageSize, searchText, proxyGroupFilter),
         }}
       />
 

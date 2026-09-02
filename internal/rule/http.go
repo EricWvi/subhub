@@ -80,7 +80,8 @@ func parseListRulesInput(r *http.Request) ListRulesInput {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
 	search := r.URL.Query().Get("search")
-	return ListRulesInput{Page: page, PageSize: pageSize, Search: search}
+	proxyGroup := r.URL.Query().Get("proxy_group")
+	return ListRulesInput{Page: page, PageSize: pageSize, Search: search, ProxyGroup: proxyGroup}
 }
 
 func (h *Handler) createRule(w http.ResponseWriter, r *http.Request) {

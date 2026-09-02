@@ -4,15 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 )
 
 var ErrNotFound = errors.New("rule not found")
 
 type ListRulesInput struct {
-	Page     int
-	PageSize int
-	Search   string
+	Page       int
+	PageSize   int
+	Search     string
+	ProxyGroup string
 }
 
 func normalizeListInput(in ListRulesInput) ListRulesInput {
@@ -120,11 +122,10 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (Rule, error) {
 func (r *Repository) List(ctx context.Context, in ListRulesInput) ([]Rule, int, error) {
 	in = normalizeListInput(in)
 
-	var countArgs []any
-	countQuery := `SELECT COUNT(*) FROM rules`
-	if in.Search != "" {
-		countQuery += ` WHERE pattern LIKE ?`
-		countArgs = append(countArgs, "%"+in.Search+"%")
+	countQuery := `SELECT COUNT(*) FROM rules r LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id`
+	countWhere, countArgs := ruleListFilters(in)
+	if len(countWhere) > 0 {
+		countQuery += " WHERE " + strings.Join(countWhere, " AND ")
 	}
 
 	var total int
@@ -137,10 +138,9 @@ func (r *Repository) List(ctx context.Context, in ListRulesInput) ([]Rule, int, 
 	listQuery := `SELECT r.id, r.rule_type, r.pattern, r.target_kind, r.proxy_group_id, pg.name, r.created_at, r.updated_at
 		 FROM rules r
 		 LEFT JOIN proxy_groups pg ON pg.id = r.proxy_group_id`
-	var listArgs []any
-	if in.Search != "" {
-		listQuery += ` WHERE r.pattern LIKE ?`
-		listArgs = append(listArgs, "%"+in.Search+"%")
+	listWhere, listArgs := ruleListFilters(in)
+	if len(listWhere) > 0 {
+		listQuery += " WHERE " + strings.Join(listWhere, " AND ")
 	}
 	listQuery += ` ORDER BY r.id DESC LIMIT ? OFFSET ?`
 	listArgs = append(listArgs, in.PageSize, offset)
@@ -171,6 +171,25 @@ func (r *Repository) List(ctx context.Context, in ListRulesInput) ([]Rule, int, 
 		rules = append(rules, rl)
 	}
 	return rules, total, rows.Err()
+}
+
+func ruleListFilters(in ListRulesInput) ([]string, []any) {
+	var where []string
+	var args []any
+	if in.Search != "" {
+		where = append(where, "r.pattern LIKE ?")
+		args = append(args, "%"+in.Search+"%")
+	}
+	if in.ProxyGroup != "" {
+		if in.ProxyGroup == "DIRECT" || in.ProxyGroup == "REJECT" {
+			where = append(where, "r.target_kind = ?")
+			args = append(args, in.ProxyGroup)
+		} else {
+			where = append(where, "r.target_kind = 'PROXY_GROUP' AND pg.name = ?")
+			args = append(args, in.ProxyGroup)
+		}
+	}
+	return where, args
 }
 
 func (r *Repository) Update(ctx context.Context, id int64, rec CreateRuleRecord) (Rule, error) {

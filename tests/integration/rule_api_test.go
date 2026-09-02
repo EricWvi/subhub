@@ -150,6 +150,35 @@ func TestListRulesUsesDescendingPagination(t *testing.T) {
 	assert.Equal(t, 3, result.Total)
 }
 
+func TestListRulesFiltersByProxyGroup(t *testing.T) {
+	ts := newTestServerWithRules(t)
+	defer ts.Close()
+
+	createProxyGroup(t, ts.URL, `{"name":"Streaming","script":""}`)
+	createProxyGroup(t, ts.URL, `{"name":"Blocked","script":""}`)
+
+	postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"direct.example","proxy_group":"DIRECT"}`).Body.Close()
+	postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"streaming.example","proxy_group":"Streaming"}`).Body.Close()
+	postJSON(t, ts.URL+"/api/rules", `{"rule_type":"DOMAIN-SUFFIX","pattern":"blocked.example","proxy_group":"Blocked"}`).Body.Close()
+
+	resp, err := http.Get(ts.URL + "/api/rules?page=1&page_size=20&proxy_group=Streaming")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	var result struct {
+		Rules []struct {
+			Pattern    string `json:"pattern"`
+			ProxyGroup string `json:"proxy_group"`
+		} `json:"rules"`
+		Total int `json:"total"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	require.Len(t, result.Rules, 1)
+	assert.Equal(t, "streaming.example", result.Rules[0].Pattern)
+	assert.Equal(t, "Streaming", result.Rules[0].ProxyGroup)
+	assert.Equal(t, 1, result.Total)
+}
+
 func TestCreateRuleRejectsUnknownProxyGroup(t *testing.T) {
 	ts := newTestServerWithRules(t)
 	defer ts.Close()
