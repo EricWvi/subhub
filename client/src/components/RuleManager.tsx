@@ -286,6 +286,7 @@ const RuleManager: React.FC = () => {
                 <Button
                   icon={<EditOutlined />}
                   onClick={() => handleEdit(record)}
+                  aria-label={`Edit ${record.pattern}`}
                 />
                 <Popconfirm
                   title="Sure to delete?"
@@ -308,7 +309,6 @@ const RuleManager: React.FC = () => {
       />
 
       <Modal
-        key={editingRule ? `edit-${editingRule.id}` : "add"}
         title={editingRule ? "Edit Rule" : "Add Rule"}
         open={modalVisible}
         onOk={handleModalOk}
