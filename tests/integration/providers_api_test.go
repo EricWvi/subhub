@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/EricWvi/subhub/internal/config"
+	customnode "github.com/EricWvi/subhub/internal/node"
 	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -33,9 +34,12 @@ func newTestServer(t *testing.T) *httptest.Server {
 	repo := provider.NewRepository(db)
 	svc := provider.NewService(repo)
 	handler := provider.NewHandler(svc)
+	nodeRepo := customnode.NewRepository(db)
+	nodeHandler := customnode.NewHandler(customnode.NewService(nodeRepo))
 
 	apiMux := http.NewServeMux()
 	handler.RegisterRoutes(apiMux)
+	nodeHandler.RegisterRoutes(apiMux)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", apiMux))

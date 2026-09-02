@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/EricWvi/subhub/internal/group"
+	customnode "github.com/EricWvi/subhub/internal/node"
 	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/render"
 	"github.com/EricWvi/subhub/internal/rule"
@@ -20,11 +22,15 @@ var (
 	ErrReservedProxiesNotFirst  = errors.New("Proxies proxy-group must stay first at position 0")
 	ErrDuplicateRuleBinding     = errors.New("internal proxy group already bound")
 	ErrNotFound                 = errors.New("subscription not found")
+	ErrInvalidCustomNode        = errors.New("invalid custom node")
+	ErrDuplicateCustomNode      = errors.New("custom node can only be selected once per proxy group")
+	ErrCustomNodeNotFound       = errors.New("custom node not found")
 )
 
 const (
 	reservedProxyGroupName = "Proxies"
 	reservedProxyGroupType = "select"
+	customProxyMemberType  = "custom"
 )
 
 type RenderedContent struct {
@@ -38,15 +44,23 @@ type Service struct {
 	providerRepo *provider.Repository
 	groupSvc     *group.Service
 	ruleRepo     *rule.Repository
+	nodeRepo     *customnode.Repository
+	nodeSvc      *customnode.Service
 	templatePath string
 }
 
-func NewService(repo *Repository, providerRepo *provider.Repository, groupSvc *group.Service, ruleRepo *rule.Repository, templatePath string) *Service {
+func NewService(repo *Repository, providerRepo *provider.Repository, groupSvc *group.Service, ruleRepo *rule.Repository, templatePath string, nodeRepos ...*customnode.Repository) *Service {
+	nodeRepo := repo.nodeRepo
+	if len(nodeRepos) > 0 && nodeRepos[0] != nil {
+		nodeRepo = nodeRepos[0]
+	}
 	return &Service{
 		repo:         repo,
 		providerRepo: providerRepo,
 		groupSvc:     groupSvc,
 		ruleRepo:     ruleRepo,
+		nodeRepo:     nodeRepo,
+		nodeSvc:      customnode.NewService(nodeRepo),
 		templatePath: templatePath,
 	}
 }
@@ -75,6 +89,9 @@ func (s *Service) CreateClashConfig(ctx context.Context, in CreateClashConfigSub
 		return ClashConfigSubscription{}, err
 	}
 	in.ProxyGroups = proxyGroups
+	if err := s.validateCustomNodes(ctx, in.ProxyGroups); err != nil {
+		return ClashConfigSubscription{}, err
+	}
 
 	return s.repo.CreateClashConfig(ctx, in)
 }
@@ -95,6 +112,9 @@ func (s *Service) UpdateClashConfig(ctx context.Context, id int64, in UpdateClas
 		return ClashConfigSubscription{}, err
 	}
 	in.ProxyGroups = proxyGroups
+	if err := s.validateCustomNodes(ctx, in.ProxyGroups); err != nil {
+		return ClashConfigSubscription{}, err
+	}
 	return s.repo.UpdateClashConfig(ctx, id, in)
 }
 
@@ -112,9 +132,46 @@ func normalizeClashConfigProxyGroups(groups []CreateClashConfigProxyGroupInput) 
 			return nil, ErrReservedProxiesNotFirst
 		}
 		group.Position = int64(i)
+		for memberIndex := range group.Proxies {
+			if strings.EqualFold(group.Proxies[memberIndex].Type, customProxyMemberType) {
+				group.Proxies[memberIndex].Type = customProxyMemberType
+			}
+		}
 		normalized[i] = group
 	}
 	return normalized, nil
+}
+
+func (s *Service) validateCustomNodes(ctx context.Context, groups []CreateClashConfigProxyGroupInput) error {
+	nodes, err := s.nodeRepo.List(ctx)
+	if err != nil {
+		return err
+	}
+	knownNodes := make(map[int64]struct{}, len(nodes))
+	for _, n := range nodes {
+		knownNodes[n.ID] = struct{}{}
+	}
+
+	for _, pg := range groups {
+		seen := map[int64]struct{}{}
+		for _, member := range pg.Proxies {
+			if member.Type != customProxyMemberType {
+				continue
+			}
+			nodeID, err := strconv.ParseInt(strings.TrimSpace(member.Value), 10, 64)
+			if err != nil || nodeID <= 0 {
+				return ErrInvalidCustomNode
+			}
+			if _, exists := knownNodes[nodeID]; !exists {
+				return ErrCustomNodeNotFound
+			}
+			if _, exists := seen[nodeID]; exists {
+				return ErrDuplicateCustomNode
+			}
+			seen[nodeID] = struct{}{}
+		}
+	}
+	return nil
 }
 
 func (s *Service) DeleteClashConfig(ctx context.Context, id int64) error {
@@ -207,6 +264,14 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 	if err != nil {
 		return RenderedContent{}, err
 	}
+	customNodes, err := s.nodeRepo.List(ctx)
+	if err != nil {
+		return RenderedContent{}, err
+	}
+	customNodesByID := make(map[int64]customnode.Node, len(customNodes))
+	for _, node := range customNodes {
+		customNodesByID[node.ID] = node
+	}
 	nodesByName := map[string]map[string]any{}
 	for _, node := range providerNodes {
 		name, _ := node["name"].(string)
@@ -225,8 +290,6 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 
 	var allNodes []map[string]any
 	seenNodes := map[string]bool{}
-	hasInternalMembers := false
-	var groupsWithInternalMembers []bool
 	var renderedGroups []render.RenderedProxyGroup
 	for _, pg := range sub.ProxyGroups {
 		rp := render.RenderedProxyGroup{
@@ -235,19 +298,16 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 			URL:      pg.URL,
 			Interval: pg.Interval,
 		}
-		hasInternalMember := false
 		for _, m := range pg.Proxies {
 			switch m.Type {
 			case "internal":
-				hasInternalMember = true
-				hasInternalMembers = true
 				groupID, err := strconv.ParseInt(m.Value, 10, 64)
 				if err != nil {
-					continue
+					return RenderedContent{}, fmt.Errorf("invalid internal member %q in proxy group %q: %w", m.Value, pg.Name, err)
 				}
 				names, nodes, err := s.groupSvc.ResolveNodesForOutput(ctx, groupID, allowedProviderIDs)
 				if err != nil {
-					continue
+					return RenderedContent{}, fmt.Errorf("resolve internal member %q in proxy group %q: %w", m.Value, pg.Name, err)
 				}
 				rp.Proxies = append(rp.Proxies, names...)
 				for _, node := range nodes {
@@ -260,6 +320,28 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 				}
 			case "reference", "DIRECT", "REJECT":
 				rp.Proxies = append(rp.Proxies, m.Value)
+			case customProxyMemberType, "Custom":
+				nodeID, err := strconv.ParseInt(strings.TrimSpace(m.Value), 10, 64)
+				if err != nil {
+					continue
+				}
+				customNode, ok := customNodesByID[nodeID]
+				if !ok {
+					continue
+				}
+				proxy, err := s.nodeSvc.ToProxy(customNode)
+				if err != nil {
+					return RenderedContent{}, err
+				}
+				name, _ := proxy["name"].(string)
+				if name == "" {
+					continue
+				}
+				rp.Proxies = append(rp.Proxies, name)
+				if !seenNodes[name] {
+					seenNodes[name] = true
+					allNodes = append(allNodes, proxy)
+				}
 			default:
 				rp.Proxies = append(rp.Proxies, m.Value)
 				node, ok := nodesByName[m.Value]
@@ -271,38 +353,6 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 			}
 		}
 		renderedGroups = append(renderedGroups, rp)
-		groupsWithInternalMembers = append(groupsWithInternalMembers, hasInternalMember)
-	}
-
-	if hasInternalMembers && len(allNodes) == 0 {
-		providerNames := make([]string, 0, len(providerNodes))
-		seenProviderNames := map[string]bool{}
-		allNodes = make([]map[string]any, 0, len(providerNodes))
-		for _, node := range providerNodes {
-			name, _ := node["name"].(string)
-			if name == "" || seenProviderNames[name] {
-				continue
-			}
-			seenProviderNames[name] = true
-			providerNames = append(providerNames, name)
-			allNodes = append(allNodes, node)
-		}
-
-		for groupIndex, hasInternalMember := range groupsWithInternalMembers {
-			if !hasInternalMember {
-				continue
-			}
-			seenNames := map[string]bool{}
-			for _, name := range renderedGroups[groupIndex].Proxies {
-				seenNames[name] = true
-			}
-			for _, name := range providerNames {
-				if !seenNames[name] {
-					renderedGroups[groupIndex].Proxies = append(renderedGroups[groupIndex].Proxies, name)
-					seenNames[name] = true
-				}
-			}
-		}
 	}
 
 	ruleRows, err := s.ruleRepo.ListAscendingForOutput(ctx)

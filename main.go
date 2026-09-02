@@ -13,6 +13,7 @@ import (
 	"github.com/EricWvi/subhub/internal/config"
 	"github.com/EricWvi/subhub/internal/fetch"
 	"github.com/EricWvi/subhub/internal/group"
+	customnode "github.com/EricWvi/subhub/internal/node"
 	"github.com/EricWvi/subhub/internal/output"
 	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/refresh"
@@ -38,6 +39,10 @@ func main() {
 	groupSvc := group.NewService(groupRepo)
 	groupHandler := group.NewHandler(groupSvc)
 
+	nodeRepo := customnode.NewRepository(db)
+	nodeSvc := customnode.NewService(nodeRepo)
+	nodeHandler := customnode.NewHandler(nodeSvc)
+
 	ruleRepo := rule.NewRepository(db)
 	ruleSvc := rule.NewService(ruleRepo)
 	ruleHandler := rule.NewHandler(ruleSvc)
@@ -45,7 +50,7 @@ func main() {
 	outputHandler := output.NewHandler(repo, ruleRepo, "data/template.yaml")
 
 	subscriptionRepo := subscription.NewRepository(db)
-	subscriptionSvc := subscription.NewService(subscriptionRepo, repo, groupSvc, ruleRepo, "data/client_sub.yaml")
+	subscriptionSvc := subscription.NewService(subscriptionRepo, repo, groupSvc, ruleRepo, "data/client_sub.yaml", nodeRepo)
 	subscriptionHandler := subscription.NewHandler(subscriptionSvc)
 
 	svc.SetSubscriptionReferenceChecker(subscriptionSvc.ProviderReferencedByAnySubscription)
@@ -53,6 +58,7 @@ func main() {
 	apiMux := http.NewServeMux()
 	handler.RegisterRoutes(apiMux)
 	groupHandler.RegisterRoutes(apiMux)
+	nodeHandler.RegisterRoutes(apiMux)
 	ruleHandler.RegisterRoutes(apiMux)
 	outputHandler.RegisterRoutes(apiMux)
 	subscriptionHandler.RegisterRoutes(apiMux)

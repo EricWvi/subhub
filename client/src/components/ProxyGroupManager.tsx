@@ -27,9 +27,7 @@ const MonacoEditorWrapper: React.FC = () => {
   const value = Form.useWatch('script', form) ?? '';
   const monacoTheme = useMonacoTheme();
   const handleMount: OnMount = (editor) => {
-    const root = editor.getDomNode();
-    if (!root) return;
-    const release = claimKeyboardPriority(root);
+    const release = claimKeyboardPriority(editor.getContainerDomNode());
     editor.onDidDispose(release);
   };
 
@@ -271,12 +269,12 @@ const ProxyGroupManager: React.FC = () => {
         }}
       />
 
-      <Modal key={editingGroup?.id || "add"}
+      <Modal
         title={editingGroup ? 'Edit Proxy Group' : 'Add Proxy Group'}
         open={modalVisible}
         onOk={handleModalOk}
         onCancel={closeModal}
-        
+        forceRender
         width={800}
       >
         <Form form={form} layout="vertical" preserve={false}>

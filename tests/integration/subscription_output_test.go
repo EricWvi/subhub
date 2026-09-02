@@ -13,6 +13,7 @@ import (
 	"github.com/EricWvi/subhub/internal/config"
 	"github.com/EricWvi/subhub/internal/fetch"
 	"github.com/EricWvi/subhub/internal/group"
+	customnode "github.com/EricWvi/subhub/internal/node"
 	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/refresh"
 	"github.com/EricWvi/subhub/internal/rule"
@@ -50,6 +51,9 @@ func newTestServerWithSubscriptionOutput(t *testing.T) (*httptest.Server, *provi
 	ruleSvc := rule.NewService(ruleRepo)
 	ruleHandler := rule.NewHandler(ruleSvc)
 
+	nodeRepo := customnode.NewRepository(db)
+	nodeHandler := customnode.NewHandler(customnode.NewService(nodeRepo))
+
 	subscriptionRepo := subscription.NewRepository(db)
 	subscriptionSvc := subscription.NewService(subscriptionRepo, providerRepo, groupSvc, ruleRepo, filepath.Join("..", "fixtures", "client_sub.yaml"))
 	subscriptionHandler := subscription.NewHandler(subscriptionSvc)
@@ -60,6 +64,7 @@ func newTestServerWithSubscriptionOutput(t *testing.T) (*httptest.Server, *provi
 	providerHandler.RegisterRoutes(apiMux)
 	groupHandler.RegisterRoutes(apiMux)
 	ruleHandler.RegisterRoutes(apiMux)
+	nodeHandler.RegisterRoutes(apiMux)
 	subscriptionHandler.RegisterRoutes(apiMux)
 
 	mux := http.NewServeMux()
@@ -130,12 +135,12 @@ func TestClashConfigContentBuildsFromStoredComponents(t *testing.T) {
 
 func TestClashConfigContentDoesNotFallbackWhenOneProviderGroupResultIsEmpty(t *testing.T) {
 	providerFixtures := []struct {
-		name      string
-		nodeNames []string
+		Name      string   `json:"name"`
+		NodeNames []string `json:"node_names"`
 	}{
-		{name: "alpha", nodeNames: []string{"alpha-keep", "alpha-other"}},
-		{name: "beta", nodeNames: []string{"beta-keep", "beta-other"}},
-		{name: "gamma", nodeNames: []string{"gamma-other"}},
+		{Name: "alpha", NodeNames: []string{"alpha-keep", "alpha-other"}},
+		{Name: "beta", NodeNames: []string{"beta-keep", "beta-other"}},
+		{Name: "gamma", NodeNames: []string{"gamma-other"}},
 	}
 
 	upstreams := make([]*httptest.Server, 0, len(providerFixtures))
@@ -145,8 +150,8 @@ func TestClashConfigContentDoesNotFallbackWhenOneProviderGroupResultIsEmpty(t *t
 			w.Header().Set("Content-Type", "text/yaml")
 			w.Header().Set("Subscription-Userinfo", "upload=0; download=100; total=1000; expire=1893456000")
 			fmt.Fprintln(w, "proxies:")
-			for _, nodeName := range fixture.nodeNames {
-				fmt.Fprintf(w, "  - {name: %s, type: vmess, server: %s.example.com, port: 443}\n", nodeName, fixture.name)
+			for _, nodeName := range fixture.NodeNames {
+				fmt.Fprintf(w, "  - {name: %s, type: vmess, server: %s.example.com, port: 443}\n", nodeName, fixture.Name)
 			}
 		}))
 		upstreams = append(upstreams, upstream)
@@ -158,7 +163,7 @@ func TestClashConfigContentDoesNotFallbackWhenOneProviderGroupResultIsEmpty(t *t
 
 	providerIDs := make([]int64, 0, len(providerFixtures))
 	for i, fixture := range providerFixtures {
-		providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"%s","url":"%s"}`, fixture.name, upstreams[i].URL))
+		providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"%s","url":"%s"}`, fixture.Name, upstreams[i].URL))
 		refreshResp := refreshProvider(t, ts.URL, providerID)
 		require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
 		refreshResp.Body.Close()
@@ -195,7 +200,7 @@ func TestClashConfigContentDoesNotFallbackWhenOneProviderGroupResultIsEmpty(t *t
 	assert.NotContains(t, body, "name: gamma-other")
 }
 
-func TestClashConfigContentFallsBackToAllSelectedProviderNodesWhenAllGroupsResolveEmpty(t *testing.T) {
+func TestClashConfigContentPreservesEmptyInternalGroupResult(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
 		w.Header().Set("Content-Type", "text/yaml")
@@ -241,12 +246,46 @@ func TestClashConfigContentFallsBackToAllSelectedProviderNodesWhenAllGroupsResol
 	require.Equal(t, http.StatusOK, contentResp.StatusCode)
 
 	body := readBody(t, contentResp)
-	assert.Contains(t, body, "name: alpha-node")
-	assert.Contains(t, body, "name: beta-node")
-	assert.Contains(t, body, "name: gamma-node")
-	assert.Contains(t, body, "- alpha-node")
-	assert.Contains(t, body, "- beta-node")
-	assert.Contains(t, body, "- gamma-node")
+	assert.NotContains(t, body, "name: alpha-node")
+	assert.NotContains(t, body, "name: beta-node")
+	assert.NotContains(t, body, "name: gamma-node")
+}
+
+func TestClashConfigContentReturnsErrorForInvalidInternalGroupScript(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/yaml")
+		w.Header().Set("Subscription-Userinfo", "upload=0; download=100; total=1000; expire=1893456000")
+		fmt.Fprintln(w, "proxies:\n  - {name: alpha-node, type: vmess, server: alpha.example.com, port: 443}")
+	}))
+	defer upstream.Close()
+
+	ts, _ := newTestServerWithSubscriptionOutput(t)
+	defer ts.Close()
+
+	providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"alpha","url":"%s"}`, upstream.URL))
+	refreshResp := refreshProvider(t, ts.URL, providerID)
+	require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
+	refreshResp.Body.Close()
+
+	groupID := createProxyGroup(t, ts.URL, `{"name":"Broken","script":"function (proxyNodes) { throw new Error('boom') }"}`)
+	createResp := postJSON(t, ts.URL+"/api/subscriptions/clash-configs", fmt.Sprintf(`{
+		"name":"Broken Filter",
+		"providers":[%d],
+		"proxy_groups":[{
+			"name":"Proxies",
+			"type":"select",
+			"proxies":[{"type":"internal","value":"%d"}],
+			"bind_internal_proxy_group_id":%d
+		}]
+	}`, providerID, groupID, groupID))
+	defer createResp.Body.Close()
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
+
+	contentResp, err := http.Get(ts.URL + "/api/subscriptions/clash-configs/1/content")
+	require.NoError(t, err)
+	defer contentResp.Body.Close()
+	require.Equal(t, http.StatusInternalServerError, contentResp.StatusCode)
+	assert.Contains(t, readBody(t, contentResp), "boom")
 }
 
 func TestClashConfigSubscriptionContentRendersProxyGroupsInStoredOrder(t *testing.T) {

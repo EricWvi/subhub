@@ -57,6 +57,11 @@ interface Provider {
   name: string;
 }
 
+interface CustomNode {
+  id: number;
+  name: string;
+}
+
 interface InternalGroup {
   id: number;
   name: string;
@@ -91,9 +96,18 @@ const normalizeProxyGroupMembers = (
   proxies?: ProxyMember[],
 ): ProxyMember[] =>
   (proxies || []).map((proxy) => ({
-    type: proxy.type,
+    type: proxy.type.toLowerCase() === "custom" ? "custom" : proxy.type,
     value: proxy.value,
   }));
+
+const hasDuplicateCustomNodes = (groups: ProxyGroupFormValue[]): boolean =>
+  groups.some((group) => {
+    const customNodeIDs = group.proxies
+      .filter((member) => member.type === "custom")
+      .map((member) => member.value)
+      .filter(Boolean);
+    return new Set(customNodeIDs).size !== customNodeIDs.length;
+  });
 
 const normalizeProxyGroups = (
   proxyGroups?: Partial<ProxyGroupFormValue>[],
@@ -143,6 +157,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
   );
   const [loading, setLoading] = useState(false);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [customNodes, setCustomNodes] = useState<CustomNode[]>([]);
   const [internalGroups, setInternalGroups] = useState<InternalGroup[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingSub, setEditingSub] = useState<ClashConfigSubscription | null>(
@@ -191,10 +206,21 @@ const ClashConfigSubscriptionManager: React.FC = () => {
     }
   };
 
+  const fetchCustomNodes = async () => {
+    try {
+      const response = await apiClient("/api/nodes");
+      const data = await response.json();
+      setCustomNodes(data.nodes || []);
+    } catch {
+      return;
+    }
+  };
+
   useEffect(() => {
     fetchSubscriptions();
     fetchProviders();
     fetchInternalGroups();
+    fetchCustomNodes();
   }, []);
 
   const closeModal = () => {
@@ -293,6 +319,10 @@ const ClashConfigSubscriptionManager: React.FC = () => {
           return g;
         }),
       };
+      if (hasDuplicateCustomNodes(payload.proxy_groups)) {
+        message.error("A custom node can only be selected once per group");
+        return;
+      }
       const url = editingSub
         ? `/api/subscriptions/clash-configs/${editingSub.id}`
         : "/api/subscriptions/clash-configs";
@@ -346,6 +376,9 @@ const ClashConfigSubscriptionManager: React.FC = () => {
   const providerMap = Object.fromEntries(providers.map((p) => [p.id, p.name]));
   const groupMap = Object.fromEntries(
     internalGroups.map((g) => [g.id, g.name]),
+  );
+  const customNodeMap = Object.fromEntries(
+    customNodes.map((n) => [n.id, n.name]),
   );
 
   return (
@@ -447,6 +480,8 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                         <Tag key={`${m.type}:${m.value}:${idx}`}>
                           {m.type === "internal"
                             ? groupMap[Number(m.value)] || m.value
+                            : m.type === "custom" || m.type === "Custom"
+                              ? customNodeMap[Number(m.value)] || m.value
                             : m.value}
                         </Tag>
                       ))}
@@ -758,6 +793,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                                             label: "Reference",
                                             value: "reference",
                                           },
+                                          { label: "Custom", value: "custom" },
                                           { label: "DIRECT", value: "DIRECT" },
                                           { label: "REJECT", value: "REJECT" },
                                         ]}
@@ -766,10 +802,12 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                                     <Form.Item
                                       noStyle
                                       shouldUpdate={(prev, curr) =>
-                                        prev.proxy_groups?.[field.name]
-                                          ?.proxies?.[mf.name]?.type !==
-                                        curr.proxy_groups?.[field.name]
-                                          ?.proxies?.[mf.name]?.type
+                                        JSON.stringify(
+                                          prev.proxy_groups?.[field.name]?.proxies,
+                                        ) !==
+                                        JSON.stringify(
+                                          curr.proxy_groups?.[field.name]?.proxies,
+                                        )
                                       }
                                     >
                                       {() => {
@@ -821,6 +859,46 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                                                   .map((g) => g.name)
                                                   .filter((n) => n && n !== currentName)
                                                   .map((name) => ({ label: name, value: name }))}
+                                              />
+                                            </Form.Item>
+                                          );
+                                        }
+                                        if (type === "custom") {
+                                          const groupMembers: ProxyMember[] =
+                                            form.getFieldValue([
+                                              "proxy_groups",
+                                              field.name,
+                                              "proxies",
+                                            ]) || [];
+                                          const usedNodeIDs = groupMembers
+                                            .filter(
+                                              (member, index) =>
+                                                index !== mf.name &&
+                                                member.type === "custom",
+                                            )
+                                            .map((member) => member.value);
+                                          return (
+                                            <Form.Item
+                                              name={[mf.name, "value"]}
+                                              noStyle
+                                              rules={[{ required: true }]}
+                                            >
+                                              <Select
+                                                showSearch
+                                                optionFilterProp="label"
+                                                placeholder="Select Node"
+                                                style={{ width: 200 }}
+                                                options={customNodes
+                                                  .filter(
+                                                    (node) =>
+                                                      !usedNodeIDs.includes(
+                                                        String(node.id),
+                                                      ),
+                                                  )
+                                                  .map((node) => ({
+                                                    label: node.name,
+                                                    value: String(node.id),
+                                                  }))}
                                               />
                                             </Form.Item>
                                           );

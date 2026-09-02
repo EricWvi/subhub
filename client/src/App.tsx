@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ConfigProvider, theme, Layout, Menu, Typography, App as AntdApp } from "antd";
 import ProviderManager from "./components/ProviderManager";
+import NodeManager from "./components/NodeManager";
 import ProxyGroupManager from "./components/ProxyGroupManager";
 import RuleManager from "./components/RuleManager";
 import SubscriptionManager from "./components/SubscriptionManager";
@@ -29,6 +30,7 @@ const AppContent: React.FC = () => {
           onClick={(e) => setCurrentTab(e.key)}
           items={[
             { key: "providers", label: "Providers" },
+            { key: "nodes", label: "Nodes" },
             { key: "groups", label: "Proxy Groups" },
             { key: "rules", label: "Rules" },
             { key: "subscriptions", label: "Subscriptions" },
@@ -47,6 +49,8 @@ const AppContent: React.FC = () => {
         >
           {currentTab === "providers" ? (
             <ProviderManager />
+          ) : currentTab === "nodes" ? (
+            <NodeManager />
           ) : currentTab === "groups" ? (
             <ProxyGroupManager />
           ) : currentTab === "rules" ? (

@@ -83,7 +83,7 @@ func (s *Service) ListNodes(ctx context.Context, groupID int64) ([]ResolvedNode,
 func (s *Service) selectNodes(script string, nodes []ResolvedNode) ([]ResolvedNode, error) {
 	selectedIDs, err := SelectNodeIDs(script, nodes)
 	if err != nil {
-		return nodes, nil
+		return nil, err
 	}
 
 	byID := map[int64]ResolvedNode{}
@@ -116,16 +116,15 @@ func (s *Service) ResolveNodesForOutput(ctx context.Context, groupID int64, allo
 	if strings.TrimSpace(g.Script) != "" {
 		selectedIDs, err := SelectNodeIDs(g.Script, rawNodes)
 		if err != nil {
-			filteredNodes = rawNodes
-		} else {
-			idSet := map[int64]bool{}
-			for _, id := range selectedIDs {
-				idSet[id] = true
-			}
-			for _, n := range rawNodes {
-				if idSet[n.ID] {
-					filteredNodes = append(filteredNodes, n)
-				}
+			return nil, nil, err
+		}
+		idSet := map[int64]bool{}
+		for _, id := range selectedIDs {
+			idSet[id] = true
+		}
+		for _, n := range rawNodes {
+			if idSet[n.ID] {
+				filteredNodes = append(filteredNodes, n)
 			}
 		}
 	} else {

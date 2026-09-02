@@ -204,6 +204,8 @@ func (h *Handler) createClashConfig(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		case errors.Is(err, ErrReservedProxiesRequired), errors.Is(err, ErrReservedProxiesNotFirst):
 			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, ErrInvalidCustomNode), errors.Is(err, ErrDuplicateCustomNode), errors.Is(err, ErrCustomNodeNotFound):
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		default:
 			log.Printf("[API] Create clash config failed: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -245,6 +247,8 @@ func (h *Handler) updateClashConfig(w http.ResponseWriter, r *http.Request, id i
 		case errors.Is(err, ErrProvidersRequired):
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		case errors.Is(err, ErrReservedProxiesRequired), errors.Is(err, ErrReservedProxiesNotFirst):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case errors.Is(err, ErrInvalidCustomNode), errors.Is(err, ErrDuplicateCustomNode), errors.Is(err, ErrCustomNodeNotFound):
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		case errors.Is(err, ErrNotFound):
 			http.Error(w, "subscription not found", http.StatusNotFound)

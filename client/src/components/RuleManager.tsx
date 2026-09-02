@@ -333,6 +333,7 @@ const RuleManager: React.FC = () => {
         open={modalVisible}
         onOk={handleModalOk}
         onCancel={closeModal}
+        forceRender
       >
         <Form 
           form={form} 

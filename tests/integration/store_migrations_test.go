@@ -19,7 +19,7 @@ func TestMustOpenRecordsAppliedMigrationsOnce(t *testing.T) {
 	var appliedCount int
 	err := db.QueryRow(`SELECT COUNT(*) FROM migrations`).Scan(&appliedCount)
 	require.NoError(t, err)
-	assert.Equal(t, 7, appliedCount)
+	assert.Equal(t, 8, appliedCount)
 
 	rows, err := db.Query(`SELECT filename, applied_at FROM migrations ORDER BY filename`)
 	require.NoError(t, err)
@@ -32,7 +32,7 @@ func TestMustOpenRecordsAppliedMigrationsOnce(t *testing.T) {
 		assert.NotEmpty(t, appliedAt)
 	}
 	require.NoError(t, rows.Err())
-	assert.Equal(t, []string{"001_initial.sql", "002_add_rules.sql", "003_add_subscriptions.sql", "004_add_clash_config_proxy_group_position.sql", "005_proxy_nodes_enabled.sql", "006_drop_rule_provider_fk.sql", "007_provider_auto_fetch.sql"}, filenames)
+	assert.Equal(t, []string{"001_initial.sql", "002_add_rules.sql", "003_add_subscriptions.sql", "004_add_clash_config_proxy_group_position.sql", "005_proxy_nodes_enabled.sql", "006_drop_rule_provider_fk.sql", "007_provider_auto_fetch.sql", "008_add_custom_nodes.sql"}, filenames)
 
 	require.NoError(t, db.Close())
 
@@ -41,7 +41,7 @@ func TestMustOpenRecordsAppliedMigrationsOnce(t *testing.T) {
 
 	err = reopened.QueryRow(`SELECT COUNT(*) FROM migrations`).Scan(&appliedCount)
 	require.NoError(t, err)
-	assert.Equal(t, 7, appliedCount)
+	assert.Equal(t, 8, appliedCount)
 }
 
 func TestMustOpenCreatesMigrationHistoryTable(t *testing.T) {

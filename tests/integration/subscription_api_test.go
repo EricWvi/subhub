@@ -12,6 +12,7 @@ import (
 	"github.com/EricWvi/subhub/internal/config"
 	"github.com/EricWvi/subhub/internal/fetch"
 	"github.com/EricWvi/subhub/internal/group"
+	customnode "github.com/EricWvi/subhub/internal/node"
 	"github.com/EricWvi/subhub/internal/output"
 	"github.com/EricWvi/subhub/internal/provider"
 	"github.com/EricWvi/subhub/internal/refresh"
@@ -50,6 +51,9 @@ func newTestServerWithSubscriptions(t *testing.T) *httptest.Server {
 	ruleSvc := rule.NewService(ruleRepo)
 	ruleHandler := rule.NewHandler(ruleSvc)
 
+	nodeRepo := customnode.NewRepository(db)
+	nodeHandler := customnode.NewHandler(customnode.NewService(nodeRepo))
+
 	outputHandler := output.NewHandler(providerRepo, ruleRepo, filepath.Join("..", "fixtures", "template.yaml"))
 
 	subscriptionRepo := subscription.NewRepository(db)
@@ -62,6 +66,7 @@ func newTestServerWithSubscriptions(t *testing.T) *httptest.Server {
 	providerHandler.RegisterRoutes(apiMux)
 	groupHandler.RegisterRoutes(apiMux)
 	ruleHandler.RegisterRoutes(apiMux)
+	nodeHandler.RegisterRoutes(apiMux)
 	outputHandler.RegisterRoutes(apiMux)
 	subscriptionHandler.RegisterRoutes(apiMux)
 

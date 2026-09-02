@@ -216,7 +216,7 @@ func TestProxyGroupScriptFiltersNodesByReturnedIDs(t *testing.T) {
 	assert.Equal(t, "ss-jp-01", result.Nodes[0].Name)
 }
 
-func TestProxyGroupScriptErrorFallsBackToAllProxyNodes(t *testing.T) {
+func TestProxyGroupScriptErrorReturnsServerError(t *testing.T) {
 	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
 	require.NoError(t, err)
 
@@ -243,14 +243,8 @@ func TestProxyGroupScriptErrorFallsBackToAllProxyNodes(t *testing.T) {
 	nodesResp, err := http.Get(fmt.Sprintf("%s/api/proxy-groups/%d/nodes", ts.URL, created.Group.ID))
 	require.NoError(t, err)
 	defer nodesResp.Body.Close()
-
-	var result struct {
-		Nodes []struct {
-			ID int64 `json:"id"`
-		} `json:"nodes"`
-	}
-	require.NoError(t, json.NewDecoder(nodesResp.Body).Decode(&result))
-	assert.Len(t, result.Nodes, 2)
+	require.Equal(t, http.StatusInternalServerError, nodesResp.StatusCode)
+	assert.Contains(t, readBody(t, nodesResp), "boom")
 }
 
 func TestUpdatingOneGroupScriptDoesNotChangeOtherGroups(t *testing.T) {

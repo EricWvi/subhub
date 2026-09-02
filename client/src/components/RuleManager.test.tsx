@@ -15,6 +15,42 @@ const existingRule = {
 };
 
 describe("RuleManager", () => {
+  it("loads an existing rule when editing it directly", async () => {
+    const user = userEvent.setup();
+    const apiClient = vi.fn<ApiClient>(async (input) => {
+      const url = input.toString();
+
+      if (url === "/api/proxy-groups") {
+        return Response.json({ groups: [] });
+      }
+      if (url.startsWith("/api/rules?")) {
+        return Response.json({
+          rules: [existingRule],
+          page: 1,
+          page_size: 20,
+          total: 1,
+        });
+      }
+
+      return Response.json({}, { status: 404 });
+    });
+
+    renderWithProviders(<RuleManager />, { apiClient });
+
+    await user.click(
+      await screen.findByRole("button", { name: "Edit existing.example" }),
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Edit Rule" });
+    expect
+      .soft(within(dialog).getByLabelText("Pattern"))
+      .toHaveValue("existing.example");
+    expect
+      .soft(within(dialog).queryByText("DOMAIN-KEYWORD"))
+      .toBeInTheDocument();
+    expect.soft(within(dialog).queryByText("REJECT")).toBeInTheDocument();
+  });
+
   it("filters rules by proxy group", async () => {
     const user = userEvent.setup();
     const rules = [

@@ -5,14 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	customnode "github.com/EricWvi/subhub/internal/node"
 )
 
 type Repository struct {
-	db *sql.DB
+	db       *sql.DB
+	nodeRepo *customnode.Repository
 }
 
 func NewRepository(db *sql.DB) *Repository {
-	return &Repository{db: db}
+	return &Repository{db: db, nodeRepo: customnode.NewRepository(db)}
 }
 
 func nowInLocation() time.Time {
@@ -183,9 +186,13 @@ func (r *Repository) CreateClashConfig(ctx context.Context, in CreateClashConfig
 
 func insertProxyGroup(ctx context.Context, tx *sql.Tx, subID int64, pg CreateClashConfigProxyGroupInput, nowStr string) (int64, error) {
 	isSystem := 0
+	var bindInternalGroupID any
+	if pg.BindInternalGroupID != 0 {
+		bindInternalGroupID = pg.BindInternalGroupID
+	}
 	result, err := tx.ExecContext(ctx,
 		`INSERT INTO clash_config_proxy_groups (subscription_id, name, type, position, url, interval_seconds, bind_internal_proxy_group_id, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		subID, pg.Name, pg.Type, pg.Position, pg.URL, pg.Interval, pg.BindInternalGroupID, isSystem, nowStr, nowStr,
+		subID, pg.Name, pg.Type, pg.Position, pg.URL, pg.Interval, bindInternalGroupID, isSystem, nowStr, nowStr,
 	)
 	if err != nil {
 		return 0, err
