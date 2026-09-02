@@ -8,11 +8,11 @@ import (
 )
 
 type RenderedProxyGroup struct {
-	Name     string
-	Type     string
-	URL      string
-	Interval int64
-	Proxies  []string
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	URL      string   `json:"url"`
+	Interval int64    `json:"interval"`
+	Proxies  []string `json:"proxies"`
 }
 
 func RenderClashConfigSubscription(templatePath string, proxies []map[string]any, groups []RenderedProxyGroup, rules []string) (string, error) {
@@ -55,6 +55,12 @@ func RenderClashConfigSubscription(templatePath string, proxies []map[string]any
 			if n, ok := m["name"].(string); ok && !subscriptionNames[n] {
 				proxyGroups = append(proxyGroups, m)
 			}
+		}
+	}
+	for _, proxyGroup := range proxyGroups {
+		proxies, ok := proxyGroup["proxies"].([]any)
+		if !ok || len(proxies) == 0 {
+			proxyGroup["proxies"] = []any{"DIRECT"}
 		}
 	}
 	doc["proxy-groups"] = proxyGroups

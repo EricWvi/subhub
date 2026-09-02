@@ -1,12 +1,15 @@
 package parse_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/EricWvi/subhub/internal/render"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestRenderClashConfigSubscriptionAssemblesYAML(t *testing.T) {
@@ -66,6 +69,28 @@ func TestRenderClashConfigSubscriptionWithEmptyGroups(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "name: test")
 	assert.Contains(t, out, "proxy-groups:")
+}
+
+func TestRenderClashConfigSubscriptionFallsBackToDirectForEveryEmptyProxyGroup(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "template.yaml")
+	require.NoError(t, os.WriteFile(templatePath, []byte("proxy-groups:\n  - name: TemplateEmpty\n    type: select\n    proxies: []\nrules: []\n"), 0o600))
+
+	groups := []render.RenderedProxyGroup{
+		{Name: "GeneratedEmpty", Type: "select"},
+	}
+	out, err := render.RenderClashConfigSubscription(templatePath, nil, groups, nil)
+	require.NoError(t, err)
+
+	var output struct {
+		ProxyGroups []struct {
+			Name    string   `json:"name" yaml:"name"`
+			Proxies []string `json:"proxies" yaml:"proxies"`
+		} `json:"proxy_groups" yaml:"proxy-groups"`
+	}
+	require.NoError(t, yaml.Unmarshal([]byte(out), &output))
+	require.Len(t, output.ProxyGroups, 2)
+	assert.Equal(t, []string{"DIRECT"}, output.ProxyGroups[0].Proxies)
+	assert.Equal(t, []string{"DIRECT"}, output.ProxyGroups[1].Proxies)
 }
 
 func TestRenderProxyProviderSubscription(t *testing.T) {

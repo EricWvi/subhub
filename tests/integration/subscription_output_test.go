@@ -21,6 +21,7 @@ import (
 	"github.com/EricWvi/subhub/internal/subscription"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func newTestServerWithSubscriptionOutput(t *testing.T) (*httptest.Server, *provider.Repository) {
@@ -200,7 +201,7 @@ func TestClashConfigContentDoesNotFallbackWhenOneProviderGroupResultIsEmpty(t *t
 	assert.NotContains(t, body, "name: gamma-other")
 }
 
-func TestClashConfigContentPreservesEmptyInternalGroupResult(t *testing.T) {
+func TestClashConfigContentFallsBackToDirectForEmptyInternalGroupResult(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")
 		w.Header().Set("Content-Type", "text/yaml")
@@ -249,6 +250,17 @@ func TestClashConfigContentPreservesEmptyInternalGroupResult(t *testing.T) {
 	assert.NotContains(t, body, "name: alpha-node")
 	assert.NotContains(t, body, "name: beta-node")
 	assert.NotContains(t, body, "name: gamma-node")
+
+	var output struct {
+		ProxyGroups []struct {
+			Name    string   `json:"name" yaml:"name"`
+			Proxies []string `json:"proxies" yaml:"proxies"`
+		} `json:"proxy_groups" yaml:"proxy-groups"`
+	}
+	require.NoError(t, yaml.Unmarshal([]byte(body), &output))
+	require.Len(t, output.ProxyGroups, 2)
+	assert.Equal(t, "Proxies", output.ProxyGroups[0].Name)
+	assert.Equal(t, []string{"DIRECT"}, output.ProxyGroups[0].Proxies)
 }
 
 func TestClashConfigContentReturnsErrorForInvalidInternalGroupScript(t *testing.T) {
