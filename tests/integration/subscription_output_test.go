@@ -128,6 +128,127 @@ func TestClashConfigContentBuildsFromStoredComponents(t *testing.T) {
 	assert.Contains(t, body, "rules:")
 }
 
+func TestClashConfigContentDoesNotFallbackWhenOneProviderGroupResultIsEmpty(t *testing.T) {
+	providerFixtures := []struct {
+		name      string
+		nodeNames []string
+	}{
+		{name: "alpha", nodeNames: []string{"alpha-keep", "alpha-other"}},
+		{name: "beta", nodeNames: []string{"beta-keep", "beta-other"}},
+		{name: "gamma", nodeNames: []string{"gamma-other"}},
+	}
+
+	upstreams := make([]*httptest.Server, 0, len(providerFixtures))
+	for _, fixture := range providerFixtures {
+		fixture := fixture
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/yaml")
+			w.Header().Set("Subscription-Userinfo", "upload=0; download=100; total=1000; expire=1893456000")
+			fmt.Fprintln(w, "proxies:")
+			for _, nodeName := range fixture.nodeNames {
+				fmt.Fprintf(w, "  - {name: %s, type: vmess, server: %s.example.com, port: 443}\n", nodeName, fixture.name)
+			}
+		}))
+		upstreams = append(upstreams, upstream)
+		t.Cleanup(upstream.Close)
+	}
+
+	ts, _ := newTestServerWithSubscriptionOutput(t)
+	defer ts.Close()
+
+	providerIDs := make([]int64, 0, len(providerFixtures))
+	for i, fixture := range providerFixtures {
+		providerID := createProvider(t, ts.URL, fmt.Sprintf(`{"name":"%s","url":"%s"}`, fixture.name, upstreams[i].URL))
+		refreshResp := refreshProvider(t, ts.URL, providerID)
+		require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
+		refreshResp.Body.Close()
+		providerIDs = append(providerIDs, providerID)
+	}
+
+	groupID := createProxyGroup(t, ts.URL, `{"name":"Keep","script":"function (proxyNodes) { return proxyNodes.filter(function (node) { return /-keep$/.test(node.name) }).map(function (node) { return node.id }) }"}`)
+
+	createResp := postJSON(t, ts.URL+"/api/subscriptions/clash-configs", fmt.Sprintf(`{
+		"name":"Partial Group Result",
+		"providers":[%d,%d,%d],
+		"proxy_groups":[
+			{
+				"name":"Proxies",
+				"type":"select",
+				"proxies":[{"type":"internal","value":"%d"}],
+				"bind_internal_proxy_group_id":%d
+			}
+		]
+	}`, providerIDs[0], providerIDs[1], providerIDs[2], groupID, groupID))
+	defer createResp.Body.Close()
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
+
+	contentResp, err := http.Get(ts.URL + "/api/subscriptions/clash-configs/1/content")
+	require.NoError(t, err)
+	defer contentResp.Body.Close()
+	require.Equal(t, http.StatusOK, contentResp.StatusCode)
+
+	body := readBody(t, contentResp)
+	assert.Contains(t, body, "name: alpha-keep")
+	assert.Contains(t, body, "name: beta-keep")
+	assert.NotContains(t, body, "name: alpha-other")
+	assert.NotContains(t, body, "name: beta-other")
+	assert.NotContains(t, body, "name: gamma-other")
+}
+
+func TestClashConfigContentFallsBackToAllSelectedProviderNodesWhenAllGroupsResolveEmpty(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name := r.URL.Query().Get("name")
+		w.Header().Set("Content-Type", "text/yaml")
+		w.Header().Set("Subscription-Userinfo", "upload=0; download=100; total=1000; expire=1893456000")
+		fmt.Fprintf(w, "proxies:\n  - {name: %s-node, type: vmess, server: %s.example.com, port: 443}\n", name, name)
+	}))
+	defer upstream.Close()
+
+	ts, _ := newTestServerWithSubscriptionOutput(t)
+	defer ts.Close()
+
+	providerIDs := []int64{
+		createProvider(t, ts.URL, fmt.Sprintf(`{"name":"alpha","url":"%s?name=alpha"}`, upstream.URL)),
+		createProvider(t, ts.URL, fmt.Sprintf(`{"name":"beta","url":"%s?name=beta"}`, upstream.URL)),
+		createProvider(t, ts.URL, fmt.Sprintf(`{"name":"gamma","url":"%s?name=gamma"}`, upstream.URL)),
+	}
+	for _, providerID := range providerIDs {
+		refreshResp := refreshProvider(t, ts.URL, providerID)
+		require.Equal(t, http.StatusNoContent, refreshResp.StatusCode)
+		refreshResp.Body.Close()
+	}
+
+	groupID := createProxyGroup(t, ts.URL, `{"name":"Empty","script":"function (proxyNodes) { return [] }"}`)
+
+	createResp := postJSON(t, ts.URL+"/api/subscriptions/clash-configs", fmt.Sprintf(`{
+		"name":"All Empty Group Fallback",
+		"providers":[%d,%d,%d],
+		"proxy_groups":[
+			{
+				"name":"Proxies",
+				"type":"select",
+				"proxies":[{"type":"internal","value":"%d"}],
+				"bind_internal_proxy_group_id":%d
+			}
+		]
+	}`, providerIDs[0], providerIDs[1], providerIDs[2], groupID, groupID))
+	defer createResp.Body.Close()
+	require.Equal(t, http.StatusCreated, createResp.StatusCode)
+
+	contentResp, err := http.Get(ts.URL + "/api/subscriptions/clash-configs/1/content")
+	require.NoError(t, err)
+	defer contentResp.Body.Close()
+	require.Equal(t, http.StatusOK, contentResp.StatusCode)
+
+	body := readBody(t, contentResp)
+	assert.Contains(t, body, "name: alpha-node")
+	assert.Contains(t, body, "name: beta-node")
+	assert.Contains(t, body, "name: gamma-node")
+	assert.Contains(t, body, "- alpha-node")
+	assert.Contains(t, body, "- beta-node")
+	assert.Contains(t, body, "- gamma-node")
+}
+
 func TestClashConfigSubscriptionContentRendersProxyGroupsInStoredOrder(t *testing.T) {
 	fixture, err := os.ReadFile(filepath.Join("..", "fixtures", "provider_plain.yaml"))
 	require.NoError(t, err)

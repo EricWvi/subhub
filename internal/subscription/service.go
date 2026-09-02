@@ -225,6 +225,8 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 
 	var allNodes []map[string]any
 	seenNodes := map[string]bool{}
+	hasInternalMembers := false
+	var groupsWithInternalMembers []bool
 	var renderedGroups []render.RenderedProxyGroup
 	for _, pg := range sub.ProxyGroups {
 		rp := render.RenderedProxyGroup{
@@ -233,9 +235,12 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 			URL:      pg.URL,
 			Interval: pg.Interval,
 		}
+		hasInternalMember := false
 		for _, m := range pg.Proxies {
 			switch m.Type {
 			case "internal":
+				hasInternalMember = true
+				hasInternalMembers = true
 				groupID, err := strconv.ParseInt(m.Value, 10, 64)
 				if err != nil {
 					continue
@@ -266,6 +271,38 @@ func (s *Service) BuildClashConfigContent(ctx context.Context, id int64) (Render
 			}
 		}
 		renderedGroups = append(renderedGroups, rp)
+		groupsWithInternalMembers = append(groupsWithInternalMembers, hasInternalMember)
+	}
+
+	if hasInternalMembers && len(allNodes) == 0 {
+		providerNames := make([]string, 0, len(providerNodes))
+		seenProviderNames := map[string]bool{}
+		allNodes = make([]map[string]any, 0, len(providerNodes))
+		for _, node := range providerNodes {
+			name, _ := node["name"].(string)
+			if name == "" || seenProviderNames[name] {
+				continue
+			}
+			seenProviderNames[name] = true
+			providerNames = append(providerNames, name)
+			allNodes = append(allNodes, node)
+		}
+
+		for groupIndex, hasInternalMember := range groupsWithInternalMembers {
+			if !hasInternalMember {
+				continue
+			}
+			seenNames := map[string]bool{}
+			for _, name := range renderedGroups[groupIndex].Proxies {
+				seenNames[name] = true
+			}
+			for _, name := range providerNames {
+				if !seenNames[name] {
+					renderedGroups[groupIndex].Proxies = append(renderedGroups[groupIndex].Proxies, name)
+					seenNames[name] = true
+				}
+			}
+		}
 	}
 
 	ruleRows, err := s.ruleRepo.ListAscendingForOutput(ctx)
