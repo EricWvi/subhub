@@ -81,6 +81,12 @@ func RenderClashConfigSubscription(templatePath string, proxies []map[string]any
 }
 
 func RenderProxyProviderSubscription(nodes []map[string]any) (string, error) {
+	if len(nodes) == 0 {
+		nodes = []map[string]any{{
+			"name": "DIRECT",
+			"type": "direct",
+		}}
+	}
 	out, err := yaml.Marshal(map[string]any{"proxies": nodes})
 	if err != nil {
 		return "", err

@@ -107,7 +107,17 @@ func TestRenderProxyProviderSubscription(t *testing.T) {
 func TestRenderProxyProviderSubscriptionEmpty(t *testing.T) {
 	out, err := render.RenderProxyProviderSubscription(nil)
 	require.NoError(t, err)
-	assert.Contains(t, out, "proxies:")
+
+	var output struct {
+		Proxies []struct {
+			Name string `yaml:"name"`
+			Type string `yaml:"type"`
+		} `yaml:"proxies"`
+	}
+	require.NoError(t, yaml.Unmarshal([]byte(out), &output))
+	require.Len(t, output.Proxies, 1)
+	assert.Equal(t, "DIRECT", output.Proxies[0].Name)
+	assert.Equal(t, "direct", output.Proxies[0].Type)
 }
 
 func TestRenderRuleProviderSubscription(t *testing.T) {
