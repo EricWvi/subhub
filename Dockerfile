@@ -1,5 +1,5 @@
 # --- Stage 1: Frontend Builder ---
-FROM node:20.19-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:20.19-alpine AS frontend-builder
 
 # Set working directory
 WORKDIR /app
@@ -14,7 +14,7 @@ COPY client/ .
 RUN npm run build
 
 # --- Stage 2: Backend Builder ---
-FROM golang:1.26-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS backend-builder
 
 # Set working directory
 WORKDIR /app
@@ -26,10 +26,12 @@ RUN go mod download
 # Accept build args
 ARG VERSION
 ARG BUILDTIME
+ARG TARGETOS
+ARG TARGETARCH
 
 # Copy source code and build
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-w -s -buildid="
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "-w -s -buildid="
 
 # --- Stage 3: Runtime image ---
 FROM alpine:latest
