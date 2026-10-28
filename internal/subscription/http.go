@@ -20,6 +20,8 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/subscriptions/clash-configs", h.handleClashConfigSubscriptions)
 	mux.HandleFunc("/subscriptions/clash-configs/", h.handleClashConfigSubscriptionByID)
+	mux.HandleFunc("/subscriptions/node-providers", h.handleNodeProviderSubscriptions)
+	mux.HandleFunc("/subscriptions/node-providers/", h.handleNodeProviderSubscriptionByID)
 	mux.HandleFunc("/subscriptions/proxy-providers", h.handleProxyProviderSubscriptions)
 	mux.HandleFunc("/subscriptions/proxy-providers/", h.handleProxyProviderSubscriptionByID)
 	mux.HandleFunc("/subscriptions/rule-providers", h.handleRuleProviderSubscriptions)
