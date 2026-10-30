@@ -19,7 +19,17 @@ import {
   Dropdown,
   theme,
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, EyeOutlined, ImportOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CopyOutlined,
+  EyeOutlined,
+  ImportOutlined,
+  HolderOutlined,
+  LockOutlined,
+  OrderedListOutlined,
+} from "@ant-design/icons";
 import Editor from "@monaco-editor/react";
 import { formatDate24h, useMonacoTheme } from "../utils";
 import { useApiClient } from "../api";
@@ -170,6 +180,10 @@ const ClashConfigSubscriptionManager: React.FC = () => {
   const [previewDrawerVisible, setPreviewDrawerVisible] = useState(false);
   const [previewContent, setPreviewContent] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [sortModalVisible, setSortModalVisible] = useState(false);
+  const [sortingGroups, setSortingGroups] = useState<ProxyGroupFormValue[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const fetchSubscriptions = async () => {
     setLoading(true);
@@ -248,6 +262,42 @@ const ClashConfigSubscriptionManager: React.FC = () => {
     form.setFieldValue("proxy_groups", imported);
     setActiveProxyGroupKey(["0"]);
     message.success(`Imported proxy groups from "${source.name}"`);
+  };
+
+  const openSortModal = () => {
+    const groups: ProxyGroupFormValue[] =
+      form.getFieldValue("proxy_groups") || [];
+    setSortingGroups(groups.map((group) => ({ ...group })));
+    setSortModalVisible(true);
+  };
+
+  const closeSortModal = () => {
+    setSortModalVisible(false);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleSortDrop = (targetIndex: number) => {
+    if (dragIndex === null || targetIndex === 0 || dragIndex === targetIndex) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const next = [...sortingGroups];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    setSortingGroups(next);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleSortOk = () => {
+    form.setFieldValue(
+      "proxy_groups",
+      sortingGroups.map((group, index) => ({ ...group, position: index })),
+    );
+    setActiveProxyGroupKey(["0"]);
+    closeSortModal();
   };
 
   const handleAdd = () => {
@@ -564,6 +614,14 @@ const ClashConfigSubscriptionManager: React.FC = () => {
                       }}
                     >
                       Add Proxy Group
+                    </Button>
+                    <Button
+                      size="small"
+                      icon={<OrderedListOutlined />}
+                      disabled={fields.length < 3}
+                      onClick={openSortModal}
+                    >
+                      Sort
                     </Button>
                     {subscriptions.filter((s) => s.id !== editingSub?.id).length > 0 && (
                       <Dropdown
@@ -937,6 +995,79 @@ const ClashConfigSubscriptionManager: React.FC = () => {
             )}
           </Form.List>
         </Form>
+      </Modal>
+
+      <Modal
+        title="Sort Proxy Groups"
+        open={sortModalVisible}
+        onOk={handleSortOk}
+        onCancel={closeSortModal}
+        width={480}
+        destroyOnHidden
+      >
+        <Text type="secondary">
+          Drag to reorder. Proxies always stays first.
+        </Text>
+        <div style={{ marginTop: 12, maxHeight: "60vh", overflowY: "auto" }}>
+          {sortingGroups.map((group, index) => {
+            const isReserved = index === 0;
+            const isDragging = dragIndex === index;
+            const isDragOver =
+              dragOverIndex === index && dragIndex !== null && dragIndex !== index;
+            return (
+              <div
+                key={`${index}:${group.name}`}
+                draggable={!isReserved}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  setDragIndex(index);
+                }}
+                onDragOver={(e) => {
+                  if (isReserved || dragIndex === null) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (dragOverIndex !== index) setDragOverIndex(index);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleSortDrop(index);
+                }}
+                onDragEnd={() => {
+                  setDragIndex(null);
+                  setDragOverIndex(null);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "10px 12px",
+                  marginBottom: 6,
+                  borderRadius: token.borderRadius,
+                  border: `1px ${isDragOver ? "dashed" : "solid"} ${
+                    isDragOver ? token.colorPrimary : token.colorBorderSecondary
+                  }`,
+                  background: isReserved
+                    ? token.colorFillQuaternary
+                    : token.colorBgContainer,
+                  opacity: isDragging ? 0.4 : 1,
+                  cursor: isReserved ? "not-allowed" : "grab",
+                  userSelect: "none",
+                }}
+              >
+                {isReserved ? (
+                  <LockOutlined style={{ color: token.colorTextTertiary }} />
+                ) : (
+                  <HolderOutlined style={{ color: token.colorTextSecondary }} />
+                )}
+                <Text type="secondary" style={{ width: 20 }}>
+                  {index + 1}
+                </Text>
+                <Text strong>{group.name || "New Group"}</Text>
+                {isReserved && <Tag color="blue">System</Tag>}
+              </div>
+            );
+          })}
+        </div>
       </Modal>
 
       <Drawer
