@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Table,
   Button,
@@ -184,6 +184,7 @@ const ClashConfigSubscriptionManager: React.FC = () => {
   const [sortingGroups, setSortingGroups] = useState<ProxyGroupFormValue[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const sortListRef = useRef<HTMLDivElement>(null);
 
   const fetchSubscriptions = async () => {
     setLoading(true);
@@ -289,6 +290,21 @@ const ClashConfigSubscriptionManager: React.FC = () => {
     setSortingGroups(next);
     setDragIndex(null);
     setDragOverIndex(null);
+  };
+
+  const handleSortAutoScroll = (e: React.DragEvent<HTMLDivElement>) => {
+    const container = sortListRef.current;
+    if (!container || dragIndex === null) return;
+    const rect = container.getBoundingClientRect();
+    const edge = Math.min(80, rect.height / 4);
+    const maxStep = 20;
+    if (e.clientY < rect.top + edge) {
+      const ratio = (rect.top + edge - e.clientY) / edge;
+      container.scrollTop -= Math.ceil(maxStep * Math.min(ratio, 1));
+    } else if (e.clientY > rect.bottom - edge) {
+      const ratio = (e.clientY - (rect.bottom - edge)) / edge;
+      container.scrollTop += Math.ceil(maxStep * Math.min(ratio, 1));
+    }
   };
 
   const handleSortOk = () => {
@@ -1008,7 +1024,11 @@ const ClashConfigSubscriptionManager: React.FC = () => {
         <Text type="secondary">
           Drag to reorder. Proxies always stays first.
         </Text>
-        <div style={{ marginTop: 12, maxHeight: "60vh", overflowY: "auto" }}>
+        <div
+          ref={sortListRef}
+          onDragOver={handleSortAutoScroll}
+          style={{ marginTop: 12, maxHeight: "60vh", overflowY: "auto" }}
+        >
           {sortingGroups.map((group, index) => {
             const isReserved = index === 0;
             const isDragging = dragIndex === index;
